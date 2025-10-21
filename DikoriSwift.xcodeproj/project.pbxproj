@@ -45,6 +45,16 @@
 			path = DikoriSwiftUITests;
 			sourceTree = "<group>";
 		};
+		6E65AFAA2EA7878400E9A0C8 /* ViewPages */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ViewPages;
+			sourceTree = "<group>";
+		};
+		6E65AFAB2EA7879300E9A0C8 /* ViewComponents */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ViewComponents;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +85,8 @@
 		6E65AF762EA7876000E9A0C8 = {
 			isa = PBXGroup;
 			children = (
+				6E65AFAB2EA7879300E9A0C8 /* ViewComponents */,
+				6E65AFAA2EA7878400E9A0C8 /* ViewPages */,
 				6E65AF812EA7876100E9A0C8 /* DikoriSwift */,
 				6E65AF902EA7876100E9A0C8 /* DikoriSwiftTests */,
 				6E65AF9A2EA7876100E9A0C8 /* DikoriSwiftUITests */,
@@ -109,6 +121,8 @@
 			);
 			fileSystemSynchronizedGroups = (
 				6E65AF812EA7876100E9A0C8 /* DikoriSwift */,
+				6E65AFAA2EA7878400E9A0C8 /* ViewPages */,
+				6E65AFAB2EA7879300E9A0C8 /* ViewComponents */,
 			);
 			name = DikoriSwift;
 			packageProductDependencies = (
