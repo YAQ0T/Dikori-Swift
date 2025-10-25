@@ -65,7 +65,7 @@ final class ProductService {
     }
 
     func fetchProducts(query: ProductQuery = ProductQuery()) async throws -> [Product] {
-        var components = URLComponents(url: baseURL.appendingPathComponent("products"), resolvingAgainstBaseURL: false)
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/products"), resolvingAgainstBaseURL: false)
         components?.queryItems = query.queryItems()
 
         guard let url = components?.url else {
