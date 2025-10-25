@@ -50,44 +50,41 @@ struct ProductCard: View {
 
             // التفاصيل
             VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.headline)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
-
-                Spacer(minLength: 0)
-
-                HStack {
                     Spacer()
+
                     Button {
                         isFav.toggle()
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: isFav ? "heart.fill" : "heart")
-                                .imageScale(.medium)
-                            Text(isFav ? "في المفضلة" : "أضِف إلى المفضلة")
-                                .font(.footnote).fontWeight(.semibold)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(
-                            (isFav ? Color.red.opacity(0.12) : Color.black.opacity(0.06)),
-                            in: Capsule()
-                        )
+                        Image(systemName: isFav ? "heart.fill" : "heart")
+                            .imageScale(.medium)
+                            .font(.title3)
+                            .padding(8)
+                            .foregroundStyle(isFav ? Color.red : Color.primary)
+                            .background(
+                                Circle()
+                                    .fill((isFav ? Color.red.opacity(0.15) : Color.black.opacity(0.05)))
+                            )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text(isFav ? "إزالة من المفضلة" : "أضِف إلى المفضلة"))
                 }
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 12)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 250, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.white)
