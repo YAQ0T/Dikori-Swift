@@ -37,8 +37,8 @@ public struct Products: View {
 
     // أعمدة الشبكة (عمودان)
     private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 18),
+        GridItem(.flexible(), spacing: 18),
     ]
 
     // تصفية حسب البحث + المفضلة
@@ -62,7 +62,7 @@ public struct Products: View {
                     emptyState
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: columns, spacing: 1) {
+                        LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
                             ForEach(filteredItems) { product in
                                 // تنقّل إلى صفحة التفاصيل
                                 NavigationLink {
@@ -70,15 +70,18 @@ public struct Products: View {
                                     ProductDetails()
                                 } label: {
                                     // استخدم ProductCard كما بنيناه بدون سعر/سلة
-                                    ProductCard()
-                                        .frame(maxWidth: .infinity).scaleEffect(0.9)
+                                    ProductCard(
+                                        imageURL: product.imageURL,
+                                        title: product.title,
+                                        subtitle: product.subtitle,
+                                        isFavorite: product.isFavorite
+                                    )
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 12)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 20)
                     }
                     .background(Color(.systemGroupedBackground))
                 }
