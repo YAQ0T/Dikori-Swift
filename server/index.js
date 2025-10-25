@@ -116,7 +116,11 @@ const WEBHOOK_ALLOWED_IPS = (
 const Order = require("./models/Order");
 const Variant = require("./models/Variant");
 const Product = require("./models/Product");
-const { prepareLahzaPaymentUpdate, verifyLahzaTransaction } = require("./utils/lahza");
+const {
+  prepareLahzaPaymentUpdate,
+  verifyLahzaTransaction,
+} = require("./utils/lahza");
+const { queueOrderSummarySMS } = require("./utils/orderSms");
 
 function getClientIp(req) {
   const xff = req.headers["x-forwarded-for"];
@@ -243,6 +247,7 @@ async function lahzaWebhookHandler(req, res) {
         expectedCurrency,
         amountForStorage,
         transactionId,
+        cardDetails,
         successSet,
         mismatchSet,
       } = prepareLahzaPaymentUpdate({
@@ -280,6 +285,11 @@ async function lahzaWebhookHandler(req, res) {
 
       if (updated) {
         await decrementStockByOrderItems(updated.items || []);
+        queueOrderSummarySMS({
+          order: updated,
+          cardType: cardDetails?.cardType,
+          cardLast4: cardDetails?.last4,
+        });
       }
     }
 
@@ -338,6 +348,7 @@ app.use("/api/variants", require("./routes/variants"));
 app.use("/api/products", require("./routes/products"));
 app.use("/api/orders", require("./routes/orders"));
 app.use("/api/users", require("./routes/user"));
+app.use("/api/notifications", require("./routes/notifications"));
 app.use("/api/discount-rules", require("./routes/discountRules"));
 app.use("/api/discounts", require("./routes/discounts"));
 app.use("/api/home-collections", require("./routes/homeCollections"));

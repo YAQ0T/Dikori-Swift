@@ -108,6 +108,62 @@ function extractTransactionId(data = {}) {
   );
 }
 
+function mapAuthorizationDetails(raw = {}) {
+  if (!raw || typeof raw !== "object") return { cardType: "", last4: "" };
+  const cardType =
+    raw.card_type ||
+    raw.cardType ||
+    raw.brand ||
+    raw.card_brand ||
+    raw.bank ||
+    "";
+  const last4 =
+    raw.last4 ||
+    raw.last_4 ||
+    raw.lastDigits ||
+    raw.last_digits ||
+    raw.last ||
+    "";
+
+  const normalizedType = typeof cardType === "string" ? cardType.trim() : "";
+  const normalizedLast4 = typeof last4 === "string" || typeof last4 === "number"
+    ? String(last4).replace(/\D+/g, "").slice(-4)
+    : "";
+
+  return {
+    cardType: normalizedType || "",
+    last4: normalizedLast4 || "",
+  };
+}
+
+function extractCardDetails({ verification = {}, eventPayload = {} } = {}) {
+  const candidates = [];
+  if (verification?.raw?.authorization) {
+    candidates.push(verification.raw.authorization);
+  }
+  if (verification?.response?.data?.authorization) {
+    candidates.push(verification.response.data.authorization);
+  }
+  if (verification?.metadata?.authorization) {
+    candidates.push(verification.metadata.authorization);
+  }
+  if (eventPayload?.authorization) {
+    candidates.push(eventPayload.authorization);
+  }
+  if (eventPayload?.data?.authorization) {
+    candidates.push(eventPayload.data.authorization);
+  }
+
+  for (const candidate of candidates) {
+    const details = mapAuthorizationDetails(candidate);
+    if (details.cardType || details.last4) {
+      return details;
+    }
+  }
+
+  return { cardType: "", last4: "" };
+}
+
 function mapVerificationPayload(raw = {}) {
   const metadata = parseMetadata(raw.metadata);
   const expectedMinor = resolveMinorAmount({
@@ -260,6 +316,16 @@ function prepareLahzaPaymentUpdate({
   if (verifiedCurrency) mismatchSet.paymentVerifiedCurrency = verifiedCurrency;
   if (transactionId) mismatchSet.paymentTransactionId = String(transactionId);
 
+  const cardDetails = extractCardDetails({ verification, eventPayload });
+  if (cardDetails.cardType) {
+    successSet.paymentCardType = cardDetails.cardType;
+    mismatchSet.paymentCardType = cardDetails.cardType;
+  }
+  if (cardDetails.last4) {
+    successSet.paymentCardLast4 = cardDetails.last4;
+    mismatchSet.paymentCardLast4 = cardDetails.last4;
+  }
+
   return {
     amountMatches,
     currencyMatches,
@@ -271,6 +337,7 @@ function prepareLahzaPaymentUpdate({
     expectedCurrency,
     amountForStorage,
     transactionId,
+    cardDetails,
     successSet,
     mismatchSet,
   };
@@ -283,5 +350,6 @@ module.exports = {
   resolveMinorAmount,
   verifyLahzaTransaction,
   prepareLahzaPaymentUpdate,
+  extractCardDetails,
   MINOR_AMOUNT_TOLERANCE,
 };

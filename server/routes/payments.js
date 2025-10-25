@@ -7,6 +7,7 @@ const {
   prepareLahzaPaymentUpdate,
   verifyLahzaTransaction,
 } = require("../utils/lahza");
+const { queueOrderSummarySMS } = require("../utils/orderSms");
 
 const router = express.Router();
 
@@ -186,6 +187,7 @@ router.post("/status/:reference/confirm", async (req, res) => {
           currencyMatches,
           successSet,
           mismatchSet,
+          cardDetails,
         } = prepareLahzaPaymentUpdate({ order, verification });
 
         if (!amountMatches || !currencyMatches) {
@@ -202,6 +204,11 @@ router.post("/status/:reference/confirm", async (req, res) => {
 
           if (updated) {
             result.updated = true;
+            queueOrderSummarySMS({
+              order: updated,
+              cardType: cardDetails?.cardType,
+              cardLast4: cardDetails?.last4,
+            });
           } else {
             result.alreadyPaid = order.paymentStatus === "paid";
             await Order.updateOne({ _id: order._id }, { $set: successSet });

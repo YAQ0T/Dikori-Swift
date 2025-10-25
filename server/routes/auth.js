@@ -2,11 +2,10 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const axios = require("axios");
-const qs = require("querystring");
 const crypto = require("crypto");
 const User = require("../models/User");
 const { getJwtSecret } = require("../utils/config");
+const { sendSMSHTD, normalizePhone } = require("../utils/smsHtd");
 
 const router = express.Router();
 
@@ -28,159 +27,11 @@ const RESET_PASSWORD_THROTTLE_MESSAGE =
 ========================= */
 const JWT_SECRET = getJwtSecret();
 
-/** قاعدة HTD (تستطيع تغييرها) */
-const HTD_BASE =
-  process.env.SMS_HTD_BASE || process.env.SMS_BASE || "http://sms.htd.ps/API";
-
-/** نمط الـ API: classic | simple | auto (افتراضي) */
-const HTD_API_STYLE = String(
-  process.env.SMS_HTD_API_STYLE || "auto"
-).toLowerCase();
-
-/** دعم أسماء متعددة لمتغيرات البيئة */
-const SMS_USERNAME = process.env.SMS_USERNAME || process.env.SMS_USER || ""; // مستخدم للنمط الكلاسيكي إن وُجد
-
-const SMS_PASSWORD =
-  process.env.SMS_PASSWORD ||
-  process.env.SMS_PASS ||
-  process.env.SMS_HTD_PASSWORD ||
-  process.env.SMS_HTD_PASS ||
-  ""; // قد لا يلزم
-
-/** اسم المُرسل: يدعم SMS_SENDER أو SMS_HTD_SENDER */
-const SMS_SENDER =
-  process.env.SMS_SENDER || process.env.SMS_HTD_SENDER || "SENDER";
-
-/** معرّف HTD للنمط البسيط (id) */
-const SMS_HTD_ID = process.env.SMS_HTD_ID || process.env.SMS_ID || "";
-
-/** مفاتيح تحكّم بالإرسال */
-const SEND_SMS_ENABLED =
-  String(process.env.SEND_SMS_ENABLED || "false").toLowerCase() === "true";
-const DEV_ECHO_OTP =
-  String(process.env.DEV_ECHO_OTP || "true").toLowerCase() === "true";
-
-/** تنسيق الرقم الافتراضي
- *  - لو النمط simple: نفضّل INT (97059xxxxxxx)
- *  - غير ذلك: نستخدم ما في البيئة أو E164 افتراضيًا
- */
-const DEFAULT_RECIPIENT_FORMAT =
-  HTD_API_STYLE === "simple"
-    ? "INT"
-    : (process.env.SMS_RECIPIENT_FORMAT || "E164").toUpperCase();
-
-/* =========================
-   أدوات مساعدة
-========================= */
-function normalizePhone(phone) {
-  if (!phone) return null;
-  let p = String(phone).trim().replace(/\s+/g, "");
-  p = p.replace(/[^\d+]/g, "");
-  if (!p.startsWith("+")) p = p.replace(/^0+/, "");
-  if (!p.startsWith("+")) p = "+970" + p;
-  return p;
-}
-
 function normalizeEmail(email) {
   if (!email) return null;
   const e = String(email).trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return null;
   return e;
-}
-
-function formatForProvider(e164Phone, preferFormat = DEFAULT_RECIPIENT_FORMAT) {
-  if (!e164Phone) return null;
-  const digits = e164Phone.replace(/^\+/, ""); // 97059xxxxxxx
-  if (preferFormat === "E164") return e164Phone; // +97059xxxxxxx
-  if (preferFormat === "INT") return digits; // 97059xxxxxxx
-  if (preferFormat === "LOCAL") {
-    // 059xxxxxxx
-    if (digits.startsWith("970")) {
-      const rest = digits.slice(3);
-      return "0" + rest;
-    }
-    return "0" + digits;
-  }
-  return digits; // افتراضي INT
-}
-
-/** يحدّد نمط الـ API المستخدم فعليًا */
-function resolveApiStyle() {
-  if (HTD_API_STYLE === "simple" || HTD_API_STYLE === "classic")
-    return HTD_API_STYLE;
-  // auto:
-  // إن وُجد id (SMS_HTD_ID) ولا يوجد UserName صريح، نستخدم simple
-  if (SMS_HTD_ID && !SMS_USERNAME) return "simple";
-  // إن وُجد UserName (أو Password)، نستخدم classic
-  if (SMS_USERNAME || SMS_PASSWORD) return "classic";
-  // fallback: simple
-  return "simple";
-}
-
-async function sendSMSHTD(toE164, text) {
-  if (!toE164 || !text) return { ok: false, reason: "missing_to_or_text" };
-
-  const style = resolveApiStyle();
-  const to = formatForProvider(
-    toE164,
-    style === "simple" ? "INT" : DEFAULT_RECIPIENT_FORMAT
-  );
-
-  // وضع التطوير: اطبع بدل الإرسال
-  if (!SEND_SMS_ENABLED) {
-    if (DEV_ECHO_OTP) {
-      console.log(
-        `[DEV SMS] To: ${toE164} (provider:${to}) | Message: ${text}`
-      );
-    }
-    return { ok: true, dev: true, style };
-  }
-
-  try {
-    const base = HTD_BASE.replace(/\/+$/, "");
-    const url = `${base}/SendSMS.aspx`;
-
-    let payload;
-    if (style === "simple") {
-      // ✅ النمط الذي أرسلته:
-      // SendSMS.aspx?id=...&sender=...&to=970xxxxxxx&msg=MessageHere
-      payload = {
-        id: SMS_HTD_ID, // لازم توفّره في .env
-        sender: SMS_SENDER,
-        to: to, // 97059xxxxxxx
-        msg: text,
-      };
-      if (!payload.id) {
-        return { ok: false, reason: "missing_SMS_HTD_ID_for_simple_mode" };
-      }
-    } else {
-      // 🧩 النمط الكلاسيكي:
-      // SendSMS.aspx?UserName=...&Password=...&SenderName=...&Recipients=...&Message=...
-      payload = {
-        SenderName: SMS_SENDER,
-        Recipients: to,
-        Message: text,
-      };
-      if (SMS_USERNAME) payload.UserName = SMS_USERNAME;
-      if (SMS_PASSWORD) payload.Password = SMS_PASSWORD;
-    }
-
-    const full = url + "?" + qs.stringify(payload);
-    const res = await axios.get(full, { timeout: 15000 });
-
-    console.log(
-      `[HTD SMS] style=${style} status=${res.status} data=`,
-      res.data
-    );
-    return { ok: true, style, status: res.status, data: res.data };
-  } catch (e) {
-    console.error(
-      "[HTD SMS] Error:",
-      e?.response?.status,
-      e?.response?.data || e?.message
-    );
-    return { ok: false, reason: e?.message || "send_failed" };
-  }
 }
 
 /* =========================

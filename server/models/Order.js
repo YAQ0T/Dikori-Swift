@@ -112,6 +112,8 @@ const OrderSchema = new mongoose.Schema(
     paymentVerifiedAmount: { type: Number, min: 0, default: null },
     paymentVerifiedCurrency: { type: String, default: "" },
     paymentTransactionId: { type: String, default: "" },
+    paymentCardType: { type: String, default: "" },
+    paymentCardLast4: { type: String, default: "" },
     notes: { type: String, default: "" },
   },
   { timestamps: true }
