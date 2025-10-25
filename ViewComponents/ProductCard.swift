@@ -2,17 +2,31 @@ import SwiftUI
 
 struct ProductCard: View {
     // مرِّر بياناتك الحقيقية هنا لاحقًا
-    let imageURL: URL? = URL(string: "https://i.imgur.com/KKPpSNy.png")
-    let title: String = "PCD 1/2 X 30 X 120"
-    let subtitle: String = "نصلة سي إن سي ممتازة"
+    let imageURL: URL?
+    let title: String
+    let subtitle: String
 
     /// استخدم هذا الإغلاق ليقوم الأب بعملية الـ navigation
-    var onTap: () -> Void = {}
+    var onTap: () -> Void
 
     @State private var isFav: Bool = false
 
+    init(
+        imageURL: URL? = URL(string: "https://i.imgur.com/KKPpSNy.png"),
+        title: String = "PCD 1/2 X 30 X 120",
+        subtitle: String = "نصلة سي إن سي ممتازة",
+        isFavorite: Bool = false,
+        onTap: @escaping () -> Void = {}
+    ) {
+        self.imageURL = imageURL
+        self.title = title
+        self.subtitle = subtitle
+        self.onTap = onTap
+        _isFav = State(initialValue: isFavorite)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             // صورة المنتج
             AsyncImage(url: imageURL) { phase in
                 switch phase {
@@ -35,11 +49,9 @@ struct ProductCard: View {
                     EmptyView()
                 }
             }
-            .frame(height: 187)
-            .frame(maxWidth: .infinity)
+            .frame(height: 170)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
 
             // التفاصيل
             VStack(alignment: .leading, spacing: 6) {
@@ -77,10 +89,13 @@ struct ProductCard: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 10)
         }
-        .frame(width: 200, height: 300)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
+        )
         .contentShape(Rectangle()) // يجعل النقر يشمل كل البطاقة
         .onTapGesture {
             onTap()
