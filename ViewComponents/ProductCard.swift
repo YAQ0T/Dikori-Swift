@@ -52,15 +52,22 @@ struct ProductCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.footnote.weight(.semibold))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    Spacer()
 
+                }
+                
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
                     Button {
+                
                         isFav.toggle()
                     } label: {
+                        
                         Image(systemName: isFav ? "heart.fill" : "heart")
                             .imageScale(.medium)
                             .font(.title3)
@@ -73,12 +80,9 @@ struct ProductCard: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(isFav ? "إزالة من المفضلة" : "أضِف إلى المفضلة"))
-                }
 
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .lineLimit(2)
+
+
             }
             .padding(.horizontal, 8)
             .padding(.bottom, 12)
