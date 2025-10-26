@@ -7,122 +7,145 @@
 
 import SwiftUI
 
-// MARK: - Models
-
-struct Variant: Identifiable, Hashable {
-    let id = UUID()
-    let color: String
-    let size: String
-    let price: Double
-    let imageURL: URL
-}
-
 struct ProductDetails: View {
-    // بيانات المنتج العامة
-    let title: String = "PCD 1/2 X 30 X 120"
-    let fallbackPrice: Double = 50.0
-    let fallbackImageURL: URL = URL(string: "https://i.imgur.com/KKPpSNy.png")!
-    let shortSpecs: [String] = ["PCD", "Ø30", "L120", "1/2\" Shaft"]
+    private let productID: String
+    private let includeVariants: Bool
+    private let initialProduct: Product?
 
-    // أمثلة Variants — لاحقًا اجلبها من API
-    let variants: [Variant] = {
-        let base = "https://i.imgur.com/KKPpSNy.png"
-        func url(_ s: String) -> URL { URL(string: s)! }
-        // يمكنك تبديل الروابط بصور مختلفة لكل لون إن رغبت
-        return [
-            Variant(color: "Red",    size: "23cm", price: 55, imageURL: url(base)),
-            Variant(color: "Red",    size: "25cm", price: 58, imageURL: url(base)),
-            Variant(color: "Red",    size: "27cm", price: 61, imageURL: url(base)),
-            Variant(color: "Red",    size: "29cm", price: 65, imageURL: url(base)),
-            Variant(color: "White",  size: "23cm", price: 54, imageURL: url(base)),
-            Variant(color: "White",  size: "25cm", price: 57, imageURL: url(base)),
-            Variant(color: "White",  size: "27cm", price: 60, imageURL: url(base)),
-            Variant(color: "Silver", size: "23cm", price: 56, imageURL: url(base)),
-            Variant(color: "Silver", size: "25cm", price: 59, imageURL: url(base)),
-            Variant(color: "Silver", size: "27cm", price: 62, imageURL: url(base)),
-            Variant(color: "Silver", size: "29cm", price: 66, imageURL: url(base)),
-        ]
-    }()
+    @State private var product: Product?
+    @State private var variants: [ProductVariant] = []
+    @State private var isFetchingDetails = false
+    @State private var loadError: String?
 
-    // حالة الواجهة
-    @State private var isLoading = false
     @State private var quantity: Int = 1
     @State private var isFav: Bool = false
-
     @State private var selectedColor: String?
-    @State private var selectedSize: String?
+    @State private var selectedMeasure: String?
+    @State private var isAddingToCart = false
 
-    // MARK: - Derived
+    private let fallbackImageURL = URL(string: "https://i.imgur.com/KKPpSNy.png")!
 
-    private var availableColors: [String] {
-        Array(Set(variants.map { $0.color })).sorted()
+    init(product: Product, includeVariants: Bool = true) {
+        self.productID = product.id
+        self.includeVariants = includeVariants
+        self.initialProduct = product
+        _product = State(initialValue: product)
     }
 
-    private var availableSizesForSelectedColor: [String] {
-        if let c = selectedColor {
-            return Array(Set(variants.filter { $0.color == c }.map { $0.size }))
-                .sorted(by: sizeComparator)
-        } else {
-            return Array(Set(variants.map { $0.size })).sorted(by: sizeComparator)
+    init(productID: String, includeVariants: Bool = true) {
+        self.productID = productID
+        self.includeVariants = includeVariants
+        self.initialProduct = nil
+        _product = State(initialValue: nil)
+    }
+
+    private var currentProduct: Product? { product ?? initialProduct }
+
+    private var productTitle: String {
+        let title = currentProduct?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return title.isEmpty ? "تفاصيل المنتج" : title
+    }
+
+    private var productDescription: String {
+        let description = currentProduct?.description.preferred.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return description.isEmpty ? "لا تتوفر وصف للمنتج حالياً." : description
+    }
+
+    private var shortSpecs: [String] {
+        guard let product = currentProduct else { return [] }
+        var specs: [String] = []
+        if !product.mainCategory.isEmpty { specs.append(product.mainCategory) }
+        if !product.subCategory.isEmpty { specs.append(product.subCategory) }
+        if let category = product.category, !category.isEmpty { specs.append(category) }
+        return specs.isEmpty ? ["—"] : specs
+    }
+
+    private var availableColors: [String] {
+        let colorSet = Set(variants.map { $0.colorName })
+        return colorSet.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private func measures(for color: String?) -> [String] {
+        let filtered = variants.filter { variant in
+            guard let color else { return true }
+            return variant.colorName == color
+        }
+        let measures = filtered.map { $0.displayMeasure }
+        let measureSet = Set(measures)
+        return measureSet.sorted { lhs, rhs in
+            lhs.localizedStandardCompare(rhs) == .orderedAscending
         }
     }
 
-    private var selectedVariant: Variant? {
-        guard let c = selectedColor, let s = selectedSize else { return nil }
-        return variants.first { $0.color == c && $0.size == s }
+    private var availableMeasuresForSelectedColor: [String] {
+        measures(for: selectedColor)
     }
 
-    private var currentPrice: Double {
-        selectedVariant?.price ?? fallbackPrice
+    private var selectedVariant: ProductVariant? {
+        if let color = selectedColor, let measure = selectedMeasure {
+            return variants.first { $0.colorName == color && $0.displayMeasure == measure }
+        }
+        if let color = selectedColor {
+            return variants.first { $0.colorName == color }
+        }
+        return variants.first
     }
 
-    private var totalPrice: Double {
-        currentPrice * Double(quantity)
+    private var currentPrice: Double? {
+        selectedVariant?.price.effectiveAmount
     }
 
-    private var currentImageURL: URL {
-        selectedVariant?.imageURL ?? fallbackImageURL
+    private var currentImageURL: URL? {
+        if let url = selectedVariant?.primaryImageURL { return url }
+        if let url = currentProduct?.primaryImageURL { return url }
+        return fallbackImageURL
     }
 
-    // MARK: - Body
+    private var isContentAvailable: Bool {
+        currentProduct != nil
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 ScrollView {
                     VStack(spacing: 16) {
-                        heroImage
+                        if isContentAvailable {
+                            heroImage
+                            infoSection
+                            specsChips
+                            optionsSection
+                                .padding(.horizontal)
+                            quantityStepper
+                                .padding(.horizontal)
+                                .padding(.top, 4)
+                            descriptionSection
+                        } else if isFetchingDetails {
+                            loadingState
+                        } else {
+                            errorState
+                        }
 
-                        infoSection
+                        if let loadError {
+                            errorBanner(message: loadError)
+                                .padding(.horizontal)
+                        }
 
-                        specsChips
-
-                        // خيارات المنتج (ألوان + أحجام)
-                        optionsSection
-                            .padding(.horizontal)
-
-                        quantityStepper
-                            .padding(.horizontal)
-                            .padding(.top, 4)
-
-                        descriptionSection
-
-                        // مساحة إضافية حتى لا يغطي الشريط السفلي أي محتوى
                         Spacer(minLength: 120)
                     }
                     .padding(.top, 8)
                 }
 
+                if isFetchingDetails && !isContentAvailable {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                }
+
                 bottomBar
             }
+            .navigationTitle(productTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-//                    Button(action: { /* handled by parent Navigation */ }) {
-//                        Image(systemName: "chevron.backward")
-//                            .font(.headline)
-//                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { isFav.toggle() } label: {
                         Image(systemName: isFav ? "heart.fill" : "heart")
@@ -133,22 +156,22 @@ struct ProductDetails: View {
             }
             .tint(.primary)
             .background(Color(.systemGroupedBackground))
-            .onAppear {
-                // تحديد اختيارات افتراضية أول مرة
-                if selectedColor == nil { selectedColor = availableColors.first }
-                if selectedSize == nil { selectedSize = availableSizesForSelectedColor.first }
+            .task(id: productID) {
+                await loadProductDetails()
             }
-            .onChange(of: selectedColor) { _, _ in
-                // عند تغيير اللون، عدّل المقاس ليتوافق مع المتاح لهذا اللون
-                let sizes = availableSizesForSelectedColor
-                if let selectedSize, !sizes.contains(selectedSize) {
-                    self.selectedSize = sizes.first
-                }
+            .onAppear {
+                ensureDefaultSelections()
+            }
+            .onChange(of: selectedColor) { _ in
+                ensureMeasureSelection()
+            }
+            .onChange(of: variants) { newValue in
+                ensureDefaultSelections(for: newValue)
             }
         }
     }
 
-    // MARK: - Views
+    // MARK: - Sections
 
     private var heroImage: some View {
         AsyncImage(url: currentImageURL) { phase in
@@ -179,59 +202,56 @@ struct ProductDetails: View {
                         )
                     }
                     .overlay(alignment: .topLeading) {
-                        PriceTag(text: formattedPrice(currentPrice))
-                            .padding(12)
+                        if let currentPrice, currentPrice > 0 {
+                            PriceTag(text: formattedPrice(currentPrice))
+                                .padding(12)
+                        }
                     }
 
             case .empty:
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(Color.secondary.opacity(0.08))
-                        .frame(height: 360)
-                    ProgressView()
-                }
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 28,
-                        bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
-                    )
-                )
+                heroPlaceholder
 
-            case .failure(_):
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(Color.secondary.opacity(0.08))
-                        .frame(height: 360)
-                    Image(systemName: "photo")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                }
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 28,
-                        bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
-                    )
-                )
+            case .failure:
+                heroPlaceholder
+
             @unknown default:
-                EmptyView()
+                heroPlaceholder
             }
         }
         .padding(.horizontal)
     }
 
+    private var heroPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.secondary.opacity(0.08))
+                .frame(height: 360)
+            ProgressView()
+        }
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 28,
+                bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
+            )
+        )
+        .padding(.horizontal)
+    }
+
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(productTitle)
                 .font(.title2).fontWeight(.bold)
                 .lineLimit(2)
 
             HStack(spacing: 10) {
-                Text(formattedPrice(currentPrice))
-                    .font(.headline)
+                if let currentPrice {
+                    Text(formattedPrice(currentPrice))
+                        .font(.headline)
+                }
 
                 HStack(spacing: 2) {
-                    ForEach(0..<5) { i in
-                        Image(systemName: i < 5 ? "star.fill" : "star")
+                    ForEach(0..<5) { _ in
+                        Image(systemName: "star.fill")
                             .imageScale(.small)
                     }
                 }
@@ -264,32 +284,33 @@ struct ProductDetails: View {
 
     private var optionsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // الألوان
-            Text("اللون")
-                .font(.headline)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(availableColors, id: \.self) { color in
-                        ColorSwatch(
-                            label: color,
-                            isSelected: selectedColor == color
-                        ) { selectedColor = color }
-                    }
-                }.padding(.horizontal)
-            }
-
-            // الأحجام
-            Text("المقاس")
-                .font(.headline)
-            FlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
-                ForEach(availableSizesForSelectedColor, id: \.self) { size in
-                    SizeChip(text: size, isSelected: selectedSize == size) {
-                        selectedSize = size
-                    }
+            if !availableColors.isEmpty {
+                Text("اللون")
+                    .font(.headline)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(availableColors, id: \.self) { color in
+                            ColorSwatch(
+                                label: color,
+                                isSelected: selectedColor == color
+                            ) { selectedColor = color }
+                        }
+                    }.padding(.horizontal)
                 }
             }
 
-
+            let measures = availableMeasuresForSelectedColor
+            if !measures.isEmpty {
+                Text("المقاس")
+                    .font(.headline)
+                FlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
+                    ForEach(measures, id: \.self) { measure in
+                        SizeChip(text: measure, isSelected: selectedMeasure == measure) {
+                            selectedMeasure = measure
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -297,7 +318,7 @@ struct ProductDetails: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("الوصف")
                 .font(.headline)
-            Text("نصلة سي إن سي ممتازة بجودة عالية ومتانة موثوقة، مناسبة للأعمال الدقيقة على المواد الصلبة. تصميم PCD محسّن لعمر أطول وأداء ثابت.")
+            Text(productDescription)
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .lineSpacing(3)
@@ -339,8 +360,13 @@ struct ProductDetails: View {
                     Text("الإجمالي")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(formattedPrice(totalPrice))
-                        .font(.headline)
+                    if let total = totalPrice {
+                        Text(formattedPrice(total))
+                            .font(.headline)
+                    } else {
+                        Text("—")
+                            .font(.headline)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -348,19 +374,19 @@ struct ProductDetails: View {
                     addToCart()
                 } label: {
                     HStack {
-                        if isLoading {
+                        if isAddingToCart {
                             ProgressView()
                         } else {
                             Image(systemName: "cart.badge.plus")
                         }
-                        Text(isLoading ? "جاري الإضافة..." : "أضِف إلى السلة")
+                        Text(isAddingToCart ? "جاري الإضافة..." : "أضِف إلى السلة")
                             .fontWeight(.semibold)
                     }
                     .padding(.vertical, 14)
                     .frame(maxWidth: 220)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isLoading || selectedVariant == nil) // يتطلّب اختيارًا صالحًا
+                .disabled(isAddingToCart || selectedVariant == nil)
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
@@ -370,50 +396,139 @@ struct ProductDetails: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
+    private var totalPrice: Double? {
+        guard let unitPrice = currentPrice else { return nil }
+        return unitPrice * Double(quantity)
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("جارٍ تحميل تفاصيل المنتج...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding()
+    }
+
+    private var errorState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text("تعذّر تحميل المنتج")
+                .font(.headline)
+            Text("حاول مرة أخرى لاحقاً.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding()
+    }
+
+    private func errorBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.orange)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.orange.opacity(0.1))
+        )
+    }
+
+    // MARK: - Networking
+
+    private func loadProductDetails() async {
+        await MainActor.run {
+            isFetchingDetails = true
+            loadError = nil
+        }
+
+        do {
+            let response = try await ProductService.shared.fetchProduct(id: productID, withVariants: includeVariants)
+            await MainActor.run {
+                product = response.product
+                if includeVariants {
+                    variants = response.variants
+                }
+                isFetchingDetails = false
+                ensureDefaultSelections()
+            }
+        } catch {
+            await MainActor.run {
+                loadError = error.localizedDescription
+                isFetchingDetails = false
+            }
+        }
+    }
+
     // MARK: - Actions
 
     private func addToCart() {
-        guard !isLoading else { return }
-        guard let variant = selectedVariant else { return }
+        guard !isAddingToCart, let variant = selectedVariant else { return }
 
-        isLoading = true
+        isAddingToCart = true
 
         let payload: [String: Any] = [
-            "title": title,
-            "color": variant.color,
-            "size": variant.size,
-            "unitPrice": variant.price,
+            "productId": productID,
+            "variantId": variant.id,
+            "color": variant.colorName,
+            "measure": variant.displayMeasure,
+            "unitPrice": currentPrice ?? 0,
             "quantity": quantity,
-            "total": variant.price * Double(quantity)
+            "total": (currentPrice ?? 0) * Double(quantity)
         ]
 
-        // استخدام فعلي — استبدلها بمناداة ViewModel/Service لاحقًا
         debugPrint("Add to cart payload:", payload)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            isLoading = false
+            isAddingToCart = false
         }
     }
-
-
 
     // MARK: - Helpers
 
-    private func formattedPrice(_ n: Double) -> String {
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .currency
-        fmt.currencyCode = "ILS"
-        fmt.locale = Locale(identifier: "ar")
-        return fmt.string(from: n as NSNumber) ?? "\(n) ILS"
+    private func formattedPrice(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "ILS"
+        formatter.locale = Locale(identifier: "ar")
+        return formatter.string(from: amount as NSNumber) ?? "\(amount) ILS"
     }
 
-    private func sizeComparator(_ a: String, _ b: String) -> Bool {
-        // يحاول ترتيب 23cm < 25cm < 27cm ...
-        func numeric(_ s: String) -> Double {
-            Double(s.replacingOccurrences(of: "cm", with: "")
-                .replacingOccurrences(of: " ", with: "")) ?? 0
+    private func ensureDefaultSelections(for variants: [ProductVariant]? = nil) {
+        let variants = variants ?? self.variants
+        guard !variants.isEmpty else { return }
+
+        if let selectedColor, variants.contains(where: { $0.colorName == selectedColor }) {
+            ensureMeasureSelection(within: variants)
+            return
         }
-        return numeric(a) < numeric(b)
+
+        selectedColor = variants.first?.colorName
+        ensureMeasureSelection(within: variants)
+    }
+
+    private func ensureMeasureSelection(within variants: [ProductVariant]? = nil) {
+        let variants = variants ?? self.variants
+        guard !variants.isEmpty else { return }
+
+        let measures = availableMeasuresForSelectedColor
+        if let selectedMeasure, measures.contains(selectedMeasure) {
+            return
+        }
+        selectedMeasure = measures.first ?? variants.first?.displayMeasure
+    }
+
+    private func ensureMeasureSelection() {
+        ensureMeasureSelection(within: variants)
     }
 }
 
@@ -452,7 +567,6 @@ private struct ColorSwatch: View {
     let isSelected: Bool
     var onTap: () -> Void
 
-    // تعيين لون تقريبي لاسم اللون
     private var swatchColor: Color {
         switch label.lowercased() {
         case "red": return .red
@@ -472,7 +586,6 @@ private struct ColorSwatch: View {
                     .frame(width: 34, height: 34)
                     .overlay(Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
                 if label.lowercased() == "white" {
-                    // حدود رمادية لتمييز الأبيض
                     Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1)
                         .frame(width: 34, height: 34)
                 }
@@ -484,11 +597,9 @@ private struct ColorSwatch: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text("لون \(localized(label))"))
+        .accessibilityLabel(Text("لون \(label)"))
         .padding(.vertical, 4)
     }
-
-    private func localized(_ s: String) -> String { s } // بدّلها لاحقًا إذا أردت ترجمة الأسماء
 }
 
 private struct SizeChip: View {
@@ -514,10 +625,6 @@ private struct SizeChip: View {
     }
 }
 
-// MARK: - Simple Flow Layout for size chips
-
-/// Grid مرن بسيط لتصفيف العناصر (بديل خفيف لـ LazyVGrid بحجم تلقائي)
-/// FlowLayout بسيط لتوزيع العناصر على أسطر متعددة
 struct FlowLayout: Layout {
     var horizontalSpacing: CGFloat
     var verticalSpacing: CGFloat
@@ -569,9 +676,6 @@ struct FlowLayout: Layout {
     }
 }
 
-
-// MARK: - Preview
-
 #Preview {
-    ProductDetails()
+    ProductDetails(productID: "demo")
 }
