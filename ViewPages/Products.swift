@@ -72,7 +72,7 @@ public struct Products: View {
                                 // تنقّل إلى صفحة التفاصيل
                                 NavigationLink {
                                     // مرّر المنتج الحقيقي لصفحة التفاصيل عند الربط بالـ API
-                                    ProductDetails()
+                                    ProductDetails(product: product)
                                 } label: {
                                     // استخدم ProductCard كما بنيناه بدون سعر/سلة
                                     ProductCard(

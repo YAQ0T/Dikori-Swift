@@ -88,4 +88,56 @@ final class ProductService {
 
         return try decoder.decode([Product].self, from: data)
     }
+
+    struct ProductDetailsResponse: Decodable {
+        let product: Product
+        let variants: [ProductVariant]
+
+        private enum CodingKeys: String, CodingKey {
+            case variants
+        }
+
+        init(product: Product, variants: [ProductVariant] = []) {
+            self.product = product
+            self.variants = variants
+        }
+
+        init(from decoder: Decoder) throws {
+            let product = try Product(from: decoder)
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let variants = try container.decodeIfPresent([ProductVariant].self, forKey: .variants) ?? []
+            self.init(product: product, variants: variants)
+        }
+    }
+
+    func fetchProduct(id: String, withVariants: Bool = false) async throws -> ProductDetailsResponse {
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("api/products/\(id)"),
+            resolvingAgainstBaseURL: false
+        )
+
+        if withVariants {
+            components?.queryItems = [URLQueryItem(name: "withVariants", value: "1")]
+        }
+
+        guard let url = components?.url else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ProductServiceError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw ProductServiceError.statusCode(httpResponse.statusCode)
+        }
+
+        return try decoder.decode(ProductDetailsResponse.self, from: data)
+    }
 }
