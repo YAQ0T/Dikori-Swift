@@ -15,7 +15,13 @@ public struct Products: View {
     @State private var products: [Product] = []
     @State private var favoriteIDs: Set<String> = []
     @State private var isLoading: Bool = false
+    @State private var isLoadingMore: Bool = false
     @State private var errorMessage: String?
+    @State private var nextPage: Int = 1
+    @State private var hasMore: Bool = true
+    @State private var activeSearchQuery: String = ""
+
+    private let pageSize: Int = 100
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -53,9 +59,9 @@ public struct Products: View {
             VStack(spacing: 0) {
                 header
 
-                if isLoading {
+                if isLoading && products.isEmpty {
                     loadingState
-                } else if let errorMessage {
+                } else if let errorMessage, products.isEmpty {
                     errorState(message: errorMessage)
                 } else if filteredProducts.isEmpty {
                     emptyState
@@ -79,10 +85,19 @@ public struct Products: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .task {
+                                    await loadMoreIfNeeded(current: product)
+                                }
                             }
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 20)
+
+                        if isLoadingMore {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                        }
                     }
                     .background(Color(.systemGroupedBackground))
                 }
@@ -95,6 +110,14 @@ public struct Products: View {
             }
             .refreshable {
                 await loadProducts(force: true)
+            }
+            .onChange(of: searchText) { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty && !activeSearchQuery.isEmpty {
+                    Task {
+                        await loadProducts(force: true)
+                    }
+                }
             }
         }
     }
@@ -119,6 +142,11 @@ public struct Products: View {
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                         .submitLabel(.search)
+                        .onSubmit {
+                            Task {
+                                await loadProducts(force: true)
+                            }
+                        }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -217,16 +245,86 @@ public struct Products: View {
 
     @MainActor
     private func loadProducts(force: Bool = false) async {
-        if isLoading && !force { return }
-        isLoading = true
+        let trimmedQuery = trimmedSearchText
+        let previousQuery = activeSearchQuery
+
+        if force {
+            nextPage = 1
+            hasMore = true
+            if trimmedQuery != previousQuery {
+                products = []
+            }
+            activeSearchQuery = trimmedQuery
+        } else if nextPage == 1 && products.isEmpty {
+            activeSearchQuery = trimmedQuery
+        }
+
+        guard hasMore || nextPage == 1 else { return }
+        if isLoading || isLoadingMore { return }
+
+        let pageToLoad = nextPage
+        let shouldShowInitial = pageToLoad == 1 && products.isEmpty
+
+        if shouldShowInitial {
+            isLoading = true
+        } else {
+            isLoadingMore = true
+        }
+
         errorMessage = nil
-        defer { isLoading = false }
+
+        defer {
+            if shouldShowInitial {
+                isLoading = false
+            } else {
+                isLoadingMore = false
+            }
+        }
 
         do {
-            let fetched = try await ProductService.shared.fetchProducts()
-            products = fetched
+            let query = ProductQuery(
+                page: pageToLoad,
+                limit: pageSize,
+                search: activeSearchQuery.isEmpty ? nil : activeSearchQuery
+            )
+            let fetched = try await ProductService.shared.fetchProducts(query: query)
+
+            if pageToLoad == 1 {
+                products = fetched
+            } else {
+                let existingIDs = Set(products.map(\.id))
+                let newItems = fetched.filter { !existingIDs.contains($0.id) }
+                products.append(contentsOf: newItems)
+            }
+
+            if fetched.count < pageSize {
+                hasMore = false
+            } else {
+                nextPage = pageToLoad + 1
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            if pageToLoad == 1 {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    @MainActor
+    private func loadMoreIfNeeded(current product: Product) async {
+        guard hasMore else { return }
+        guard !isLoading && !isLoadingMore else { return }
+
+        let filtered = filteredProducts
+        guard let index = filtered.firstIndex(of: product) else { return }
+
+        let thresholdIndex = filtered.index(
+            filtered.endIndex,
+            offsetBy: -6,
+            limitedBy: filtered.startIndex
+        ) ?? filtered.startIndex
+
+        if index >= thresholdIndex {
+            await loadProducts()
         }
     }
 }
