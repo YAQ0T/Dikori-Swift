@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ProductCard: View {
-    // مرِّر بياناتك الحقيقية هنا لاحقًا
     let imageURL: URL?
     let title: String
     let subtitle: String
@@ -23,56 +22,39 @@ struct ProductCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // صورة المنتج
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .empty:
-                    ZStack {
-                        Rectangle().fill(Color.gray.opacity(0.15))
-                        ProgressView()
+        VStack(alignment: .leading, spacing: 14) {
+            ZStack(alignment: .topTrailing) {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .empty:
+                        ZStack {
+                            Rectangle().fill(Color.gray.opacity(0.15))
+                            ProgressView()
+                        }
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        Image(systemName: "photo")
+                            .resizable()
+                            .scaledToFit()
+                            .padding()
+                            .foregroundColor(.gray)
+                    @unknown default:
+                        EmptyView()
                     }
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    Image(systemName: "photo")
-                        .resizable()
-                        .scaledToFit()
-                        .padding()
-                        .foregroundColor(.gray)
-                @unknown default:
-                    EmptyView()
                 }
-            }
-            .frame(height: 140)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(height: 160)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-            // التفاصيل
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(title)
-                        .font(.footnote.weight(.semibold))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-
-                }
-                
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .lineLimit(2)
-                    Button {
-                        onToggleFavorite?()
-                    } label: {
-
+                if let onToggleFavorite {
+                    Button(action: onToggleFavorite) {
                         Image(systemName: isFavorite ? "heart.fill" : "heart")
                             .imageScale(.medium)
                             .font(.title3)
-                            .padding(8)
+                            .padding(10)
                             .foregroundStyle(isFavorite ? Color.red : Color.primary)
                             .background(
                                 Circle()
@@ -80,19 +62,29 @@ struct ProductCard: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .padding(10)
                     .accessibilityLabel(Text(isFavorite ? "إزالة من المفضلة" : "أضِف إلى المفضلة"))
-
-
-
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 12)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
         )
         .contentShape(Rectangle())
@@ -103,7 +95,6 @@ struct ProductCard: View {
 }
 
 #Preview {
-    // مثال معاينة مع تنقّل
     NavigationStack {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 16) {
