@@ -7,33 +7,25 @@
 
 import SwiftUI
 
-// نموذج مبسّط لعنصر منتج في الشبكة (ملخّص)
-private struct ProductMini: Identifiable, Hashable {
-    let id = UUID()
-    let title: String
-    let subtitle: String
-    let imageURL: URL?
-    var isFavorite: Bool = false
-}
-
 public struct Products: View {
     @State private var searchText: String = ""
     @FocusState private var isSearching: Bool
     @State private var showOnlyFavorites: Bool = false
 
-    // بيانات تجريبية — استبدلها ببياناتك لاحقًا
-    @State private var items: [ProductMini] = [
-        ProductMini(title: "PCD 1/2 X 30 X 120", subtitle: "نصلة سي إن سي ممتازة", imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 1/4 X 20 X 80",  subtitle: "دقة عالية وأداء ثابت", imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 3/8 X 25 X 100", subtitle: "مصمّم للعمر الطويل",   imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 1/2 X 40 X 120", subtitle: "مناسب للمواد الصلبة",  imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png"), isFavorite: true),
-        ProductMini(title: "PCD 8mm X 30 X 90",  subtitle: "توازن ممتاز",          imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 10mm X 35 X 110",subtitle: "اعتمادية عالية",       imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 12mm X 30 X 120",subtitle: "جودة احترافية",        imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png"), isFavorite: true),
-        ProductMini(title: "PCD 6mm X 20 X 60",  subtitle: "خيار اقتصادي",         imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 1/2 X 30 X 150", subtitle: "ثبات عند السرعات العالية", imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png")),
-        ProductMini(title: "PCD 14mm X 40 X 130",subtitle: "أداء صناعي",           imageURL: URL(string: "https://i.imgur.com/KKPpSNy.png"))
-    ]
+    @State private var products: [Product] = []
+    @State private var favoriteIDs: Set<String> = []
+    @State private var isLoading: Bool = false
+    @State private var isLoadingMore: Bool = false
+    @State private var errorMessage: String?
+    @State private var nextPage: Int = 1
+    @State private var hasMore: Bool = true
+    @State private var activeSearchQuery: String = ""
+
+    private let pageSize: Int = 100
+
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     // أعمدة الشبكة (عمودان)
     private let columns = [
@@ -42,13 +34,22 @@ public struct Products: View {
     ]
 
     // تصفية حسب البحث + المفضلة
-    private var filteredItems: [ProductMini] {
-        let base = items.filter { item in
-            guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return true }
-            let q = searchText.lowercased()
-            return item.title.lowercased().contains(q) || item.subtitle.lowercased().contains(q)
+    private var filteredProducts: [Product] {
+        var base = products
+
+        if !trimmedSearchText.isEmpty {
+            let q = trimmedSearchText.lowercased()
+            base = base.filter { product in
+                product.displayName.lowercased().contains(q) ||
+                product.secondaryText.lowercased().contains(q)
+            }
         }
-        return showOnlyFavorites ? base.filter { $0.isFavorite } : base
+
+        if showOnlyFavorites {
+            base = base.filter { favoriteIDs.contains($0.id) }
+        }
+
+        return base
     }
 
     public init() {}
@@ -58,30 +59,45 @@ public struct Products: View {
             VStack(spacing: 0) {
                 header
 
-                if filteredItems.isEmpty {
+                if isLoading && products.isEmpty {
+                    loadingState
+                } else if let errorMessage, products.isEmpty {
+                    errorState(message: errorMessage)
+                } else if filteredProducts.isEmpty {
                     emptyState
                 } else {
                     ScrollView {
                         LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
-                            ForEach(filteredItems) { product in
+                            ForEach(filteredProducts) { product in
                                 // تنقّل إلى صفحة التفاصيل
                                 NavigationLink {
                                     // مرّر المنتج الحقيقي لصفحة التفاصيل عند الربط بالـ API
-                                    ProductDetails()
+                                    ProductDetails(product: product)
                                 } label: {
                                     // استخدم ProductCard كما بنيناه بدون سعر/سلة
                                     ProductCard(
-                                        imageURL: product.imageURL,
-                                        title: product.title,
-                                        subtitle: product.subtitle,
-                                        isFavorite: product.isFavorite
-                                    )
+                                        imageURL: product.primaryImageURL,
+                                        title: product.displayName,
+                                        subtitle: product.secondaryText,
+                                        isFavorite: favoriteIDs.contains(product.id)
+                                    ) {
+                                        toggleFavorite(for: product)
+                                    }
                                 }
                                 .buttonStyle(.plain)
+                                .task {
+                                    await loadMoreIfNeeded(current: product)
+                                }
                             }
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 20)
+
+                        if isLoadingMore {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                        }
                     }
                     .background(Color(.systemGroupedBackground))
                 }
@@ -89,6 +105,20 @@ public struct Products: View {
             .navigationTitle("Dikori || ديكوري ")
             .navigationBarTitleDisplayMode(.inline)
             .background(Color(.systemGroupedBackground))
+            .task {
+                await loadProducts()
+            }
+            .refreshable {
+                await loadProducts(force: true)
+            }
+            .onChange(of: searchText) { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty && !activeSearchQuery.isEmpty {
+                    Task {
+                        await loadProducts(force: true)
+                    }
+                }
+            }
         }
     }
 
@@ -112,6 +142,11 @@ public struct Products: View {
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                         .submitLabel(.search)
+                        .onSubmit {
+                            Task {
+                                await loadProducts(force: true)
+                            }
+                        }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -156,6 +191,141 @@ public struct Products: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
         .background(Color(.systemGroupedBackground))
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("جارٍ تحميل المنتجات...")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func errorState(message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.orange)
+            Text("تعذر تحميل المنتجات")
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Button(action: {
+                Task { await loadProducts(force: true) }
+            }) {
+                Text("أعد المحاولة")
+                    .font(.body.weight(.semibold))
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule().fill(Color.accentColor.opacity(0.12))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Helpers
+
+    private func toggleFavorite(for product: Product) {
+        if favoriteIDs.contains(product.id) {
+            favoriteIDs.remove(product.id)
+        } else {
+            favoriteIDs.insert(product.id)
+        }
+    }
+
+    @MainActor
+    private func loadProducts(force: Bool = false) async {
+        let trimmedQuery = trimmedSearchText
+        let previousQuery = activeSearchQuery
+
+        if force {
+            nextPage = 1
+            hasMore = true
+            if trimmedQuery != previousQuery {
+                products = []
+            }
+            activeSearchQuery = trimmedQuery
+        } else if nextPage == 1 && products.isEmpty {
+            activeSearchQuery = trimmedQuery
+        }
+
+        guard hasMore || nextPage == 1 else { return }
+        if isLoading || isLoadingMore { return }
+
+        let pageToLoad = nextPage
+        let shouldShowInitial = pageToLoad == 1 && products.isEmpty
+
+        if shouldShowInitial {
+            isLoading = true
+        } else {
+            isLoadingMore = true
+        }
+
+        errorMessage = nil
+
+        defer {
+            if shouldShowInitial {
+                isLoading = false
+            } else {
+                isLoadingMore = false
+            }
+        }
+
+        do {
+            let query = ProductQuery(
+                page: pageToLoad,
+                limit: pageSize,
+                search: activeSearchQuery.isEmpty ? nil : activeSearchQuery
+            )
+            let fetched = try await ProductService.shared.fetchProducts(query: query)
+
+            if pageToLoad == 1 {
+                products = fetched
+            } else {
+                let existingIDs = Set(products.map(\.id))
+                let newItems = fetched.filter { !existingIDs.contains($0.id) }
+                products.append(contentsOf: newItems)
+            }
+
+            if fetched.count < pageSize {
+                hasMore = false
+            } else {
+                nextPage = pageToLoad + 1
+            }
+        } catch {
+            if pageToLoad == 1 {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    @MainActor
+    private func loadMoreIfNeeded(current product: Product) async {
+        guard hasMore else { return }
+        guard !isLoading && !isLoadingMore else { return }
+
+        let filtered = filteredProducts
+        guard let index = filtered.firstIndex(of: product) else { return }
+
+        let thresholdIndex = filtered.index(
+            filtered.endIndex,
+            offsetBy: -6,
+            limitedBy: filtered.startIndex
+        ) ?? filtered.startIndex
+
+        if index >= thresholdIndex {
+            await loadProducts()
+        }
     }
 }
 

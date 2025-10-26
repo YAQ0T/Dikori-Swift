@@ -5,19 +5,21 @@ struct ProductCard: View {
     let imageURL: URL?
     let title: String
     let subtitle: String
-
-    @State private var isFav: Bool = false
+    let isFavorite: Bool
+    let onToggleFavorite: (() -> Void)?
 
     init(
         imageURL: URL? = URL(string: "https://i.imgur.com/KKPpSNy.png"),
         title: String = "PCD 1/2 X 30 X 120",
         subtitle: String = "نصلة سي إن سي ممتازة",
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
+        onToggleFavorite: (() -> Void)? = nil
     ) {
         self.imageURL = imageURL
         self.title = title
         self.subtitle = subtitle
-        _isFav = State(initialValue: isFavorite)
+        self.isFavorite = isFavorite
+        self.onToggleFavorite = onToggleFavorite
     }
 
     var body: some View {
@@ -64,22 +66,21 @@ struct ProductCard: View {
                         .foregroundColor(.gray)
                         .lineLimit(2)
                     Button {
-                
-                        isFav.toggle()
+                        onToggleFavorite?()
                     } label: {
-                        
-                        Image(systemName: isFav ? "heart.fill" : "heart")
+
+                        Image(systemName: isFavorite ? "heart.fill" : "heart")
                             .imageScale(.medium)
                             .font(.title3)
                             .padding(8)
-                            .foregroundStyle(isFav ? Color.red : Color.primary)
+                            .foregroundStyle(isFavorite ? Color.red : Color.primary)
                             .background(
                                 Circle()
-                                    .fill((isFav ? Color.red.opacity(0.15) : Color.black.opacity(0.05)))
+                                    .fill((isFavorite ? Color.red.opacity(0.15) : Color.black.opacity(0.05)))
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(isFav ? "إزالة من المفضلة" : "أضِف إلى المفضلة"))
+                    .accessibilityLabel(Text(isFavorite ? "إزالة من المفضلة" : "أضِف إلى المفضلة"))
 
 
 
