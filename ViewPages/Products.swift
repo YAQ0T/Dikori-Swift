@@ -8,12 +8,15 @@
 import SwiftUI
 
 public struct Products: View {
+    @EnvironmentObject private var favoritesManager: FavoritesManager
+    @EnvironmentObject private var notificationsManager: NotificationsManager
+
     @State private var searchText: String = ""
     @FocusState private var isSearching: Bool
     @State private var showOnlyFavorites: Bool = false
+    @State private var activeSheet: ActiveSheet?
 
     @State private var products: [Product] = []
-    @State private var favoriteIDs: Set<String> = []
     @State private var isLoading: Bool = false
     @State private var isLoadingMore: Bool = false
     @State private var errorMessage: String?
@@ -33,6 +36,20 @@ public struct Products: View {
         GridItem(.flexible(), spacing: 18),
     ]
 
+    private enum ActiveSheet: Identifiable {
+        case favorites, notifications
+
+        var id: Int { hashValue }
+    }
+
+    private var favoritesCount: Int {
+        favoritesManager.allFavoriteIDs.count
+    }
+
+    private var unreadNotificationsCount: Int {
+        notificationsManager.notifications.filter { !$0.isRead }.count
+    }
+
     // تصفية حسب البحث + المفضلة
     private var filteredProducts: [Product] {
         var base = products
@@ -46,7 +63,7 @@ public struct Products: View {
         }
 
         if showOnlyFavorites {
-            base = base.filter { favoriteIDs.contains($0.id) }
+            base = base.filter { favoritesManager.allFavoriteIDs.contains($0.id) }
         }
 
         return base
@@ -79,7 +96,7 @@ public struct Products: View {
                                         imageURL: product.primaryImageURL,
                                         title: product.displayName,
                                         subtitle: product.secondaryText,
-                                        isFavorite: favoriteIDs.contains(product.id)
+                                        isFavorite: favoritesManager.isFavorite(product)
                                     ) {
                                         toggleFavorite(for: product)
                                     }
@@ -107,9 +124,43 @@ public struct Products: View {
             .background(Color(.systemGroupedBackground))
             .task {
                 await loadProducts()
+                await notificationsManager.loadNotifications()
             }
             .refreshable {
                 await loadProducts(force: true)
+            }
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .favorites:
+                    NavigationStack {
+                        FavoritesContent()
+                            .environmentObject(favoritesManager)
+                            .navigationTitle("مفضلتي")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("إغلاق") { activeSheet = nil }
+                                }
+                            }
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+
+                case .notifications:
+                    NavigationStack {
+                        NotificationsContent()
+                            .environmentObject(notificationsManager)
+                            .navigationTitle("الإشعارات")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("إغلاق") { activeSheet = nil }
+                                }
+                            }
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
             }
             .onChange(of: searchText) { newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -153,16 +204,63 @@ public struct Products: View {
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
 
-                // قلب: إظهار المفضلة فقط
-                Button {
-                    showOnlyFavorites.toggle()
+                Menu {
+                    Button {
+                        showOnlyFavorites.toggle()
+                    } label: {
+                        Label(
+                            showOnlyFavorites ? "عرض كل المنتجات" : "عرض المفضلة فقط",
+                            systemImage: showOnlyFavorites ? "rectangle.stack" : "heart.text.square"
+                        )
+                    }
+
+                    if favoritesCount > 0 {
+                        Button {
+                            activeSheet = .favorites
+                        } label: {
+                            Label("إدارة المفضلة (\(favoritesCount))", systemImage: "heart.circle")
+                        }
+                    }
                 } label: {
-                    Image(systemName: showOnlyFavorites ? "heart.circle.fill" : "heart")
-                        .font(.title3)
-                        .symbolRenderingMode(.hierarchical)
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: showOnlyFavorites ? "heart.circle.fill" : "heart")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+
+                        if favoritesCount > 0 {
+                            Text("\(favoritesCount)")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule().fill(Color.pink.opacity(0.9))
+                                )
+                                .foregroundStyle(Color.white)
+                                .offset(x: 10, y: -8)
+                        }
+                    }
+                }
+                .accessibilityLabel(Text("خيارات المفضلة"))
+
+                Button {
+                    activeSheet = .notifications
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: unreadNotificationsCount > 0 ? "bell.badge.fill" : "bell")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+
+                        if unreadNotificationsCount > 0 {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 10, height: 10)
+                                .offset(x: 8, y: -8)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text(showOnlyFavorites ? "عرض المفضلة مُفعّل" : "عرض المفضلة"))
+                .accessibilityLabel(Text(unreadNotificationsCount > 0 ? "إشعارات جديدة" : "الإشعارات"))
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
@@ -236,11 +334,7 @@ public struct Products: View {
     // MARK: - Helpers
 
     private func toggleFavorite(for product: Product) {
-        if favoriteIDs.contains(product.id) {
-            favoriteIDs.remove(product.id)
-        } else {
-            favoriteIDs.insert(product.id)
-        }
+        favoritesManager.toggleFavorite(product)
     }
 
     @MainActor
@@ -297,6 +391,8 @@ public struct Products: View {
                 products.append(contentsOf: newItems)
             }
 
+            favoritesManager.sync(with: products)
+
             if fetched.count < pageSize {
                 hasMore = false
             } else {
@@ -331,4 +427,6 @@ public struct Products: View {
 
 #Preview {
     Products()
+        .environmentObject(FavoritesManager())
+        .environmentObject(NotificationsManager())
 }

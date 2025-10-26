@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ProductDetails: View {
     private let productID: String
     private let includeVariants: Bool
     private let initialProduct: Product?
 
+    @EnvironmentObject private var favoritesManager: FavoritesManager
     @State private var product: Product?
     @State private var variants: [ProductVariant] = []
     @State private var isFetchingDetails = false
@@ -147,7 +149,7 @@ struct ProductDetails: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { isFav.toggle() } label: {
+                    Button { toggleFavorite() } label: {
                         Image(systemName: isFav ? "heart.fill" : "heart")
                             .font(.headline)
                             .symbolRenderingMode(.hierarchical)
@@ -161,12 +163,19 @@ struct ProductDetails: View {
             }
             .onAppear {
                 ensureDefaultSelections()
+                updateFavoriteState()
             }
             .onChange(of: selectedColor) { _ in
                 ensureMeasureSelection()
             }
             .onChange(of: variants) { newValue in
                 ensureDefaultSelections(for: newValue)
+            }
+            .onChange(of: product) { _ in
+                updateFavoriteState()
+            }
+            .onReceive(favoritesManager.$favorites) { _ in
+                updateFavoriteState()
             }
         }
     }
@@ -530,6 +539,17 @@ struct ProductDetails: View {
     private func ensureMeasureSelection() {
         ensureMeasureSelection(within: variants)
     }
+
+    private func updateFavoriteState() {
+        guard let product = currentProduct else { return }
+        isFav = favoritesManager.isFavorite(product)
+    }
+
+    private func toggleFavorite() {
+        guard let product = currentProduct else { return }
+        favoritesManager.toggleFavorite(product)
+        isFav = favoritesManager.isFavorite(product)
+    }
 }
 
 // MARK: - Small Components
@@ -677,5 +697,6 @@ struct FlowLayout: Layout {
 }
 
 #Preview {
-    ProductDetails(productID: "demo")
+    ProductDetails(product: Product(id: "demo"))
+        .environmentObject(FavoritesManager())
 }

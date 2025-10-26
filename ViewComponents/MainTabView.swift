@@ -9,53 +9,49 @@ import SwiftUI
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case shop, cart, account
+        case shop, favorites, notifications
     }
 
     @State private var selection: Tab = .shop
 
     var body: some View {
         TabView(selection: $selection) {
-            // MARK: Shop
-            Color.clear // استبدل بـ ShopView()
+            Products()
                 .tabItem {
-                    Label("Shop",
+                    Label("المتجر",
                           systemImage: selection == .shop
-                          ? "rectangle.on.rectangle.circle.fill"
-                          : "rectangle.on.rectangle.circle")
+                          ? "bag.fill"
+                          : "bag")
                 }
                 .tag(Tab.shop)
 
-            // MARK: Cart
-            Color.clear // استبدل بـ CartView()
+            FavoritesView()
                 .tabItem {
-                    Label("Cart",
-                          systemImage: selection == .cart
-                          ? "cart.fill"
-                          : "cart")
+                    Label("المفضلة",
+                          systemImage: selection == .favorites
+                          ? "heart.fill"
+                          : "heart")
                 }
-                .tag(Tab.cart)
-                .badge(2) // عدّل الرقم أو احذفه
+                .tag(Tab.favorites)
 
-            // MARK: Account
-            Color.clear // استبدل بـ AccountView()
+            NotificationsView()
                 .tabItem {
-                    Label("Account",
-                          systemImage: selection == .account
-                          ? "person.crop.circle.fill"
-                          : "person.crop.circle")
+                    Label("الإشعارات",
+                          systemImage: selection == .notifications
+                          ? "bell.fill"
+                          : "bell")
                 }
-                .tag(Tab.account)
+                .tag(Tab.notifications)
         }
-        // ستايل أنيق للتاب بار
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarColorScheme(.light, for: .tabBar)
-        .tint(Color.blue) // لون العنصر المحدد
-        .frame(height: 50)
+        .tint(Color.blue)
     }
 }
 
 #Preview {
     MainTabView()
+        .environmentObject(FavoritesManager())
+        .environmentObject(NotificationsManager())
 }
