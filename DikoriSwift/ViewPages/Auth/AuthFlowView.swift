@@ -72,15 +72,15 @@ struct AuthFlowView: View {
             notificationsManager.authToken = sessionManager.authToken
             ordersManager.authToken = sessionManager.authToken
         }
-        .onChange(of: sessionManager.session) { session in
-            notificationsManager.authToken = session?.token
-            ordersManager.authToken = session?.token
+        .onChange(of: sessionManager.session) { _, newSession in
+            notificationsManager.authToken = newSession?.token
+            ordersManager.authToken = newSession?.token
             if case .authenticated = sessionManager.state {
                 statusMessage = nil
             }
         }
-        .onChange(of: sessionManager.state) { state in
-            switch state {
+        .onChange(of: sessionManager.state) { _, newState in
+            switch newState {
             case .unauthenticated:
                 statusMessage = sessionManager.lastMessage
                 step = .login
