@@ -8,6 +8,7 @@ struct AuthFlowView: View {
 
     @EnvironmentObject private var sessionManager: SessionManager
     @EnvironmentObject private var notificationsManager: NotificationsManager
+    @EnvironmentObject private var ordersManager: OrdersManager
 
     @State private var step: Step = .login
     @State private var statusMessage: String?
@@ -63,14 +64,17 @@ struct AuthFlowView: View {
                 MainTabView()
                     .onAppear {
                         notificationsManager.authToken = sessionManager.authToken
+                        ordersManager.authToken = sessionManager.authToken
                     }
             }
         }
         .onAppear {
             notificationsManager.authToken = sessionManager.authToken
+            ordersManager.authToken = sessionManager.authToken
         }
         .onChange(of: sessionManager.session) { session in
             notificationsManager.authToken = session?.token
+            ordersManager.authToken = session?.token
             if case .authenticated = sessionManager.state {
                 statusMessage = nil
             }
@@ -103,7 +107,8 @@ struct AuthFlowView: View {
 
 #Preview {
     AuthFlowView()
-        .environmentObject(SessionManager())
+        .environmentObject(SessionManager.preview())
         .environmentObject(FavoritesManager())
-        .environmentObject(NotificationsManager())
+        .environmentObject(NotificationsManager.preview())
+        .environmentObject(OrdersManager.preview())
 }
