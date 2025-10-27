@@ -9,7 +9,7 @@ import SwiftUI
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case shop, favorites, notifications
+        case shop, favorites, account
     }
 
     @State private var selection: Tab = .shop
@@ -34,14 +34,14 @@ struct MainTabView: View {
                 }
                 .tag(Tab.favorites)
 
-            NotificationsView()
+            AccountView()
                 .tabItem {
-                    Label("الإشعارات",
-                          systemImage: selection == .notifications
-                          ? "bell.fill"
-                          : "bell")
+                    Label("حسابي",
+                          systemImage: selection == .account
+                          ? "person.crop.circle.fill"
+                          : "person.crop.circle")
                 }
-                .tag(Tab.notifications)
+                .tag(Tab.account)
         }
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
@@ -52,6 +52,7 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(SessionManager())
         .environmentObject(FavoritesManager())
         .environmentObject(NotificationsManager())
 }
