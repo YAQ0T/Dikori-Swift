@@ -52,7 +52,8 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
-        .environmentObject(SessionManager())
+        .environmentObject(SessionManager.preview())
         .environmentObject(FavoritesManager())
-        .environmentObject(NotificationsManager())
+        .environmentObject(NotificationsManager.preview())
+        .environmentObject(OrdersManager.preview())
 }

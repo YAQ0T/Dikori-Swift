@@ -39,6 +39,7 @@ final class SessionManager: ObservableObject, AuthTokenProviding {
 
         ProductService.shared.tokenProvider = self
         NotificationService.shared.tokenProvider = self
+        OrderService.shared.tokenProvider = self
 
         Task {
             await restoreSessionIfNeeded()
@@ -114,3 +115,60 @@ final class SessionManager: ObservableObject, AuthTokenProviding {
         try storage.removeValue(for: storageKey)
     }
 }
+
+#if DEBUG
+extension SessionManager {
+    private final class PreviewCredentialsStorage: CredentialsStorage {
+        private let storedData: Data?
+        private let encoder = JSONEncoder()
+        private let decoder = JSONDecoder()
+
+        init(session: AuthSession?) {
+            if let session, let data = try? encoder.encode(session) {
+                self.storedData = data
+            } else {
+                self.storedData = nil
+            }
+        }
+
+        func save<T>(_ value: T, for key: String) throws where T: Decodable, T: Encodable {
+            // No-op for previews
+        }
+
+        func load<T>(_ type: T.Type, for key: String) throws -> T? where T: Decodable, T: Encodable {
+            guard let storedData else { return nil }
+            return try decoder.decode(T.self, from: storedData)
+        }
+
+        func removeValue(for key: String) throws {
+            // No-op for previews
+        }
+    }
+
+    static func preview(session: AuthSession? = AuthSession(
+        token: "",
+        user: AuthUserDTO(
+            id: "user-preview",
+            name: "مستخدم ديكوري",
+            email: "preview@dikori.app",
+            phone: "+972500000000",
+            role: "customer",
+            phoneVerified: true
+        )
+    )) -> SessionManager {
+        let storage = PreviewCredentialsStorage(session: session)
+        let manager = SessionManager(authService: AuthService(), storage: storage)
+
+        if let session {
+            manager.session = session
+            manager.state = .authenticated(session)
+        } else {
+            manager.session = nil
+            manager.state = .unauthenticated
+        }
+
+        manager.lastMessage = nil
+        return manager
+    }
+}
+#endif
