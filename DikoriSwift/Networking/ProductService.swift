@@ -44,6 +44,7 @@ final class ProductService {
     private let session: URLSession
     private let baseURL: URL
     private let decoder: JSONDecoder
+    weak var tokenProvider: (any AuthTokenProviding)?
 
     init(session: URLSession = .shared, baseURL: URL? = nil) {
         self.session = session
@@ -75,6 +76,7 @@ final class ProductService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyAuthenticationIfNeeded(to: &request)
 
         let (data, response) = try await session.data(for: request)
 
@@ -127,6 +129,7 @@ final class ProductService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyAuthenticationIfNeeded(to: &request)
 
         let (data, response) = try await session.data(for: request)
 
@@ -139,5 +142,13 @@ final class ProductService {
         }
 
         return try decoder.decode(ProductDetailsResponse.self, from: data)
+    }
+
+    private func applyAuthenticationIfNeeded(to request: inout URLRequest) {
+        guard let token = tokenProvider?.authToken, !token.isEmpty else {
+            return
+        }
+
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 }

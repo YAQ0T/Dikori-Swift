@@ -20,6 +20,7 @@ final class NotificationService {
     private let session: URLSession
     private let baseURL: URL
     private let decoder: JSONDecoder
+    weak var tokenProvider: (any AuthTokenProviding)?
 
     init(session: URLSession = .shared, baseURL: URL? = nil) {
         self.session = session
@@ -41,15 +42,13 @@ final class NotificationService {
         self.decoder = decoder
     }
 
-    func fetchMyNotifications(token: String?) async throws -> [AppNotification] {
+    func fetchMyNotifications(token overrideToken: String? = nil) async throws -> [AppNotification] {
         let endpoint = baseURL.appendingPathComponent("api/notifications/my")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        if let token, !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        applyAuthenticationIfNeeded(to: &request, overrideToken: overrideToken)
 
         let (data, response) = try await session.data(for: request)
 
@@ -64,15 +63,13 @@ final class NotificationService {
         return try decoder.decode([AppNotification].self, from: data)
     }
 
-    func markNotificationAsRead(id: String, token: String?) async throws -> AppNotification {
+    func markNotificationAsRead(id: String, token overrideToken: String? = nil) async throws -> AppNotification {
         let endpoint = baseURL.appendingPathComponent("api/notifications/\(id)/read")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        if let token, !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        applyAuthenticationIfNeeded(to: &request, overrideToken: overrideToken)
 
         let (data, response) = try await session.data(for: request)
 
@@ -85,5 +82,11 @@ final class NotificationService {
         }
 
         return try decoder.decode(AppNotification.self, from: data)
+    }
+
+    private func applyAuthenticationIfNeeded(to request: inout URLRequest, overrideToken: String?) {
+        let token = overrideToken ?? tokenProvider?.authToken
+        guard let token, !token.isEmpty else { return }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 }
