@@ -476,6 +476,36 @@ struct Order: Identifiable, Codable, Hashable {
         )
     }
 
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(user, forKey: .user)
+        try container.encode(guestInfo, forKey: .guestInfo)
+        try container.encode(isGuest, forKey: .isGuest)
+        try container.encode(items, forKey: .items)
+        try container.encode(subtotal, forKey: .subtotal)
+        try container.encodeIfPresent(discount, forKey: .discount)
+        try container.encode(total, forKey: .total)
+        try container.encode(address, forKey: .address)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(deliveredAt, forKey: .deliveredAt)
+
+        try container.encode(payment.method, forKey: .paymentMethod)
+        try container.encode(payment.currency, forKey: .paymentCurrency)
+        try container.encode(payment.status, forKey: .paymentStatus)
+        try container.encodeIfPresent(payment.reference, forKey: .reference)
+        try container.encodeIfPresent(payment.verifiedAmount, forKey: .paymentVerifiedAmount)
+        try container.encode(payment.verifiedCurrency, forKey: .paymentVerifiedCurrency)
+        try container.encode(payment.transactionId, forKey: .paymentTransactionId)
+        try container.encode(payment.cardType, forKey: .paymentCardType)
+        try container.encode(payment.cardLast4, forKey: .paymentCardLast4)
+
+        try container.encode(notes, forKey: .notes)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+    }
+
     var currencyFormatter: NumberFormatter {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
