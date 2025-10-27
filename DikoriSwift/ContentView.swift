@@ -8,11 +8,13 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var sessionManager = SessionManager()
     @StateObject private var favoritesManager = FavoritesManager()
     @StateObject private var notificationsManager = NotificationsManager()
 
     var body: some View {
-        MainTabView()
+        AuthFlowView()
+            .environmentObject(sessionManager)
             .environmentObject(favoritesManager)
             .environmentObject(notificationsManager)
     }
