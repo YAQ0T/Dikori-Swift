@@ -37,9 +37,7 @@ final class NotificationService {
             self.baseURL = URL(string: "http://localhost:3001")!
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
+        self.decoder = ISO8601Decoder.makeDecoder()
     }
 
     func fetchMyNotifications(token overrideToken: String? = nil) async throws -> [AppNotification] {
