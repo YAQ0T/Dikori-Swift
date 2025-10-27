@@ -23,19 +23,26 @@ final class SessionManager: ObservableObject, AuthTokenProviding {
     }
 
     @Published private(set) var state: State = .loading
-    @Published private(set) var session: AuthSession?
+    @Published private(set) var session: AuthSession? {
+        didSet {
+            tokenCache.set(session?.token)
+        }
+    }
     @Published private(set) var lastMessage: String?
 
-    var authToken: String? { session?.token }
+    nonisolated var authToken: String? { tokenCache.get() }
 
     private let authService: AuthService
     private let storage: CredentialsStorage
     private let storageKey = "auth.session"
+    private let tokenCache = TokenCache()
 
     init(authService: AuthService = .shared,
          storage: CredentialsStorage = KeychainCredentialsStorage()) {
         self.authService = authService
         self.storage = storage
+
+        tokenCache.set(session?.token)
 
         ProductService.shared.tokenProvider = self
         NotificationService.shared.tokenProvider = self
@@ -113,6 +120,23 @@ final class SessionManager: ObservableObject, AuthTokenProviding {
 
     private func clearStoredSession() throws {
         try storage.removeValue(for: storageKey)
+    }
+}
+
+private final class TokenCache: @unchecked Sendable {
+    private var token: String?
+    private let lock = NSLock()
+
+    func get() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return token
+    }
+
+    func set(_ token: String?) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.token = token
     }
 }
 
