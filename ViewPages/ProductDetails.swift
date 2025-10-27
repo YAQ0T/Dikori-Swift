@@ -165,14 +165,14 @@ struct ProductDetails: View {
                 ensureDefaultSelections()
                 updateFavoriteState()
             }
-            .onChange(of: selectedColor) { _ in
-                ensureMeasureSelection()
+            .onChange(of: selectedColor) { _, newValue in
+                ensureMeasureSelection(for: newValue)
             }
-            .onChange(of: variants) { newValue in
+            .onChange(of: variants) { _, newValue in
                 ensureDefaultSelections(for: newValue)
             }
-            .onChange(of: product) { _ in
-                updateFavoriteState()
+            .onChange(of: product) { _, newValue in
+                updateFavoriteState(using: newValue)
             }
             .onReceive(favoritesManager.$favorites) { _ in
                 updateFavoriteState()
@@ -517,31 +517,40 @@ struct ProductDetails: View {
         guard !variants.isEmpty else { return }
 
         if let selectedColor, variants.contains(where: { $0.colorName == selectedColor }) {
-            ensureMeasureSelection(within: variants)
+            ensureMeasureSelection(for: selectedColor, within: variants)
             return
         }
 
         selectedColor = variants.first?.colorName
-        ensureMeasureSelection(within: variants)
+        ensureMeasureSelection(for: selectedColor, within: variants)
     }
 
-    private func ensureMeasureSelection(within variants: [ProductVariant]? = nil) {
+    private func ensureMeasureSelection(for color: String? = nil, within variants: [ProductVariant]? = nil) {
         let variants = variants ?? self.variants
         guard !variants.isEmpty else { return }
 
-        let measures = availableMeasuresForSelectedColor
+        let targetColor = color ?? selectedColor
+        let measures = measures(for: targetColor)
+
         if let selectedMeasure, measures.contains(selectedMeasure) {
             return
         }
-        selectedMeasure = measures.first ?? variants.first?.displayMeasure
+
+        if let targetColor,
+           let variantForColor = variants.first(where: { $0.colorName == targetColor }) {
+            selectedMeasure = measures.first ?? variantForColor.displayMeasure
+        } else {
+            selectedMeasure = measures.first ?? variants.first?.displayMeasure
+        }
     }
 
     private func ensureMeasureSelection() {
-        ensureMeasureSelection(within: variants)
+        ensureMeasureSelection(for: selectedColor, within: variants)
     }
 
-    private func updateFavoriteState() {
-        guard let product = currentProduct else { return }
+    private func updateFavoriteState(using product: Product? = nil) {
+        let product = product ?? currentProduct
+        guard let product else { return }
         isFav = favoritesManager.isFavorite(product)
     }
 
