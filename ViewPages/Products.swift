@@ -162,7 +162,7 @@ public struct Products: View {
                     .presentationDragIndicator(.visible)
                 }
             }
-            .onChange(of: searchText) { newValue in
+            .onChange(of: searchText) { _, newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.isEmpty && !activeSearchQuery.isEmpty {
                     Task {
