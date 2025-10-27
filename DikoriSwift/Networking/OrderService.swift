@@ -37,9 +37,7 @@ final class OrderService {
             self.baseURL = URL(string: "http://localhost:3001")!
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
+        self.decoder = ISO8601Decoder.makeDecoder()
     }
 
     func fetchMyOrders(token overrideToken: String? = nil) async throws -> [Order] {
