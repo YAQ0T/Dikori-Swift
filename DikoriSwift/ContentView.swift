@@ -12,6 +12,7 @@ struct ContentView: View {
     @StateObject private var favoritesManager = FavoritesManager()
     @StateObject private var notificationsManager = NotificationsManager()
     @StateObject private var ordersManager = OrdersManager()
+    @StateObject private var appearanceManager = AppearanceManager()
 
     var body: some View {
         AuthFlowView()
@@ -19,6 +20,8 @@ struct ContentView: View {
             .environmentObject(favoritesManager)
             .environmentObject(notificationsManager)
             .environmentObject(ordersManager)
+            .environmentObject(appearanceManager)
+            .preferredColorScheme(appearanceManager.preferredColorScheme)
     }
 }
 

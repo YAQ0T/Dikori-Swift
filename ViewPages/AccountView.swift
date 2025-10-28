@@ -18,6 +18,7 @@ struct AccountView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
+                    settingsSection
                     profileSection
                     ordersSection
                     notificationsSection
@@ -65,6 +66,32 @@ struct AccountView: View {
                 Text("لم يتم تسجيل الدخول")
                     .font(.headline)
                     .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var settingsSection: some View {
+        cardContainer(title: "الإعدادات") {
+            NavigationLink {
+                SettingsView()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "gearshape.fill")
+                        .imageScale(.large)
+                        .foregroundColor(.accentColor)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("إدارة الإعدادات")
+                            .font(.headline)
+                        Text("تخصيص المظهر والوصول إلى الدعم.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.left")
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 4)
             }
         }
     }
