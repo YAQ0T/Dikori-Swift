@@ -21,7 +21,7 @@ struct ContentView: View {
             .environmentObject(notificationsManager)
             .environmentObject(ordersManager)
             .environmentObject(appearanceManager)
-            .preferredColorScheme(appearanceManager.preferredColorScheme)
+            .preferredColorScheme(appearanceManager.activeScheme)
     }
 }
 
