@@ -10,6 +10,8 @@ import SwiftUI
 public struct Products: View {
     @EnvironmentObject private var favoritesManager: FavoritesManager
     @EnvironmentObject private var notificationsManager: NotificationsManager
+    @EnvironmentObject private var sessionManager: SessionManager
+    @EnvironmentObject private var appearanceManager: AppearanceManager
 
     @State private var searchText: String = ""
     @FocusState private var isSearching: Bool
@@ -37,9 +39,15 @@ public struct Products: View {
     ]
 
     private enum ActiveSheet: Identifiable {
-        case favorites, notifications
+        case favorites, notifications, settings
 
-        var id: Int { hashValue }
+        var id: Int {
+            switch self {
+            case .favorites: return 0
+            case .notifications: return 1
+            case .settings: return 2
+            }
+        }
     }
 
     private var favoritesCount: Int {
@@ -160,6 +168,21 @@ public struct Products: View {
                     }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
+                case .settings:
+                    NavigationStack {
+                        SettingsView()
+                            .environmentObject(sessionManager)
+                            .environmentObject(appearanceManager)
+                            .navigationTitle("الإعدادات")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("إغلاق") { activeSheet = nil }
+                                }
+                            }
+                    }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
                 }
             }
             .onChange(of: searchText) { _, newValue in
@@ -179,7 +202,7 @@ public struct Products: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 // إعدادات (مثال)
-                Button(action: {}) {
+                Button(action: { activeSheet = .settings }) {
                     Image(systemName: "gearshape.fill")
                         .font(.title3)
                 }
