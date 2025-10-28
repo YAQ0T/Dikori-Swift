@@ -25,6 +25,7 @@ public struct Products: View {
     @State private var nextPage: Int = 1
     @State private var hasMore: Bool = true
     @State private var activeSearchQuery: String = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
 
     private let pageSize: Int = 100
 
@@ -62,8 +63,15 @@ public struct Products: View {
     private var filteredProducts: [Product] {
         var base = products
 
-        if !trimmedSearchText.isEmpty {
-            let q = trimmedSearchText.lowercased()
+        let effectiveQuery: String
+        if !activeSearchQuery.isEmpty {
+            effectiveQuery = activeSearchQuery
+        } else {
+            effectiveQuery = trimmedSearchText
+        }
+
+        if !effectiveQuery.isEmpty {
+            let q = effectiveQuery.lowercased()
             base = base.filter { product in
                 product.displayName.lowercased().contains(q) ||
                 product.secondaryText.lowercased().contains(q)
@@ -186,12 +194,33 @@ public struct Products: View {
                 }
             }
             .onChange(of: searchText) { _, newValue in
+                searchDebounceTask?.cancel()
+                searchDebounceTask = nil
+
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty && !activeSearchQuery.isEmpty {
-                    Task {
-                        await loadProducts(force: true)
+
+                if trimmed.isEmpty {
+                    if !activeSearchQuery.isEmpty {
+                        searchDebounceTask = Task {
+                            await loadProducts(force: true)
+                        }
                     }
+                    return
                 }
+
+                guard trimmed != activeSearchQuery else { return }
+
+                let task = Task { [trimmed] in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+
+                    let isCurrent = await MainActor.run { self.trimmedSearchText == trimmed }
+                    guard isCurrent else { return }
+
+                    await loadProducts(force: true)
+                }
+
+                searchDebounceTask = task
             }
         }
     }
@@ -217,7 +246,9 @@ public struct Products: View {
                         .disableAutocorrection(true)
                         .submitLabel(.search)
                         .onSubmit {
-                            Task {
+                            searchDebounceTask?.cancel()
+                            searchDebounceTask = nil
+                            searchDebounceTask = Task {
                                 await loadProducts(force: true)
                             }
                         }
