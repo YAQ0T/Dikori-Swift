@@ -33,12 +33,13 @@ final class AppearanceManager: ObservableObject {
     }
 
     @Published var preference: Preference {
-        didSet { save(preference: preference) }
+        didSet {
+            activeScheme = preference.colorScheme
+            save(preference: preference)
+        }
     }
 
-    var preferredColorScheme: ColorScheme? {
-        preference.colorScheme
-    }
+    @Published private(set) var activeScheme: ColorScheme?
 
     private let storageKey = "appearance.preference"
     private let userDefaults: UserDefaults
@@ -51,6 +52,19 @@ final class AppearanceManager: ObservableObject {
         } else {
             self.preference = .system
         }
+        self.activeScheme = preference.colorScheme
+    }
+
+    func useSystemAppearance() {
+        preference = .system
+    }
+
+    func useLightAppearance() {
+        preference = .light
+    }
+
+    func useDarkAppearance() {
+        preference = .dark
     }
 
     private func save(preference: Preference) {

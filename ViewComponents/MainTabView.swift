@@ -12,6 +12,7 @@ struct MainTabView: View {
         case shop, favorites, account
     }
 
+    @EnvironmentObject private var appearanceManager: AppearanceManager
     @State private var selection: Tab = .shop
 
     var body: some View {
@@ -45,7 +46,7 @@ struct MainTabView: View {
         }
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .toolbarColorScheme(.light, for: .tabBar)
+        .applyTabBarColorScheme(appearanceManager.activeScheme)
         .tint(Color.blue)
     }
 }
@@ -56,4 +57,16 @@ struct MainTabView: View {
         .environmentObject(FavoritesManager())
         .environmentObject(NotificationsManager.preview())
         .environmentObject(OrdersManager.preview())
+        .environmentObject(AppearanceManager.preview)
+}
+
+private extension View {
+    @ViewBuilder
+    func applyTabBarColorScheme(_ scheme: ColorScheme?) -> some View {
+        if let scheme {
+            toolbarColorScheme(scheme, for: .tabBar)
+        } else {
+            self
+        }
+    }
 }
