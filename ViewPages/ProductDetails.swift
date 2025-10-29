@@ -137,13 +137,14 @@ struct ProductDetails: View {
                     }
                     .padding(.top, 8)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    bottomBar
+                }
 
                 if isFetchingDetails && !isContentAvailable {
                     ProgressView()
                         .scaleEffect(1.2)
                 }
-
-                bottomBar
             }
             .navigationTitle(productTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -362,8 +363,8 @@ struct ProductDetails: View {
     }
 
     private var bottomBar: some View {
-        VStack {
-            Spacer()
+        VStack(spacing: 0) {
+            Divider()
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("الإجمالي")
@@ -399,10 +400,9 @@ struct ProductDetails: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-            .overlay(Divider(), alignment: .top)
         }
-        .ignoresSafeArea(edges: .bottom)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
     }
 
     private var totalPrice: Double? {
