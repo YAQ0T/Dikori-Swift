@@ -9,53 +9,64 @@ import SwiftUI
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case shop, cart, account
+        case shop, favorites, account
     }
 
+    @EnvironmentObject private var appearanceManager: AppearanceManager
     @State private var selection: Tab = .shop
 
     var body: some View {
         TabView(selection: $selection) {
-            // MARK: Shop
-            Color.clear // استبدل بـ ShopView()
+            Products()
                 .tabItem {
-                    Label("Shop",
+                    Label("المتجر",
                           systemImage: selection == .shop
-                          ? "rectangle.on.rectangle.circle.fill"
-                          : "rectangle.on.rectangle.circle")
+                          ? "bag.fill"
+                          : "bag")
                 }
                 .tag(Tab.shop)
 
-            // MARK: Cart
-            Color.clear // استبدل بـ CartView()
+            FavoritesView()
                 .tabItem {
-                    Label("Cart",
-                          systemImage: selection == .cart
-                          ? "cart.fill"
-                          : "cart")
+                    Label("المفضلة",
+                          systemImage: selection == .favorites
+                          ? "heart.fill"
+                          : "heart")
                 }
-                .tag(Tab.cart)
-                .badge(2) // عدّل الرقم أو احذفه
+                .tag(Tab.favorites)
 
-            // MARK: Account
-            Color.clear // استبدل بـ AccountView()
+            AccountView()
                 .tabItem {
-                    Label("Account",
+                    Label("حسابي",
                           systemImage: selection == .account
                           ? "person.crop.circle.fill"
                           : "person.crop.circle")
                 }
                 .tag(Tab.account)
         }
-        // ستايل أنيق للتاب بار
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .toolbarColorScheme(.light, for: .tabBar)
-        .tint(Color.blue) // لون العنصر المحدد
-        .frame(height: 50)
+        .applyTabBarColorScheme(appearanceManager.activeScheme)
+        .tint(Color.blue)
     }
 }
 
 #Preview {
     MainTabView()
+        .environmentObject(SessionManager.preview())
+        .environmentObject(FavoritesManager())
+        .environmentObject(NotificationsManager.preview())
+        .environmentObject(OrdersManager.preview())
+        .environmentObject(AppearanceManager.preview)
+}
+
+private extension View {
+    @ViewBuilder
+    func applyTabBarColorScheme(_ scheme: ColorScheme?) -> some View {
+        if let scheme {
+            toolbarColorScheme(scheme, for: .tabBar)
+        } else {
+            self
+        }
+    }
 }
