@@ -40,13 +40,12 @@ public struct Products: View {
     ]
 
     private enum ActiveSheet: Identifiable {
-        case favorites, notifications, settings
+        case favorites, notifications
 
         var id: Int {
             switch self {
             case .favorites: return 0
             case .notifications: return 1
-            case .settings: return 2
             }
         }
     }
@@ -176,21 +175,6 @@ public struct Products: View {
                     }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
-                case .settings:
-                    NavigationStack {
-                        SettingsView()
-                            .environmentObject(sessionManager)
-                            .environmentObject(appearanceManager)
-                            .navigationTitle("الإعدادات")
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("إغلاق") { activeSheet = nil }
-                                }
-                            }
-                    }
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
                 }
             }
             .onChange(of: searchText) { _, newValue in
@@ -230,13 +214,6 @@ public struct Products: View {
     private var header: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                // إعدادات (مثال)
-                Button(action: { activeSheet = .settings }) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title3)
-                }
-                .buttonStyle(.plain)
-
                 // شريط البحث بكبسولة
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").opacity(0.6)
