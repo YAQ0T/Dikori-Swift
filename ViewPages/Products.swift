@@ -13,6 +13,9 @@ public struct Products: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @EnvironmentObject private var appearanceManager: AppearanceManager
 
+    private let mainCategory: String?
+    private let subCategory: String?
+
     @State private var searchText: String = ""
     @FocusState private var isSearching: Bool
     @State private var showOnlyFavorites: Bool = false
@@ -58,6 +61,10 @@ public struct Products: View {
         notificationsManager.notifications.filter { !$0.isRead }.count
     }
 
+    private var categoryKey: String {
+        "\(mainCategory ?? "")::\(subCategory ?? "")"
+    }
+
     // تصفية حسب البحث + المفضلة
     private var filteredProducts: [Product] {
         var base = products
@@ -84,7 +91,10 @@ public struct Products: View {
         return base
     }
 
-    public init() {}
+    public init(mainCategory: String? = nil, subCategory: String? = nil) {
+        self.mainCategory = mainCategory
+        self.subCategory = subCategory
+    }
 
     public var body: some View {
         NavigationStack {
@@ -205,6 +215,9 @@ public struct Products: View {
                 }
 
                 searchDebounceTask = task
+            }
+            .onChange(of: categoryKey) { _, _ in
+                handleCategoryChange()
             }
         }
     }
@@ -410,6 +423,8 @@ public struct Products: View {
             let query = ProductQuery(
                 page: pageToLoad,
                 limit: pageSize,
+                mainCategory: mainCategory,
+                subCategory: subCategory,
                 search: activeSearchQuery.isEmpty ? nil : activeSearchQuery
             )
             let fetched = try await ProductService.shared.fetchProducts(query: query)
@@ -454,10 +469,27 @@ public struct Products: View {
             await loadProducts()
         }
     }
+
+    @MainActor
+    private func handleCategoryChange() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = nil
+        searchText = ""
+        activeSearchQuery = ""
+        nextPage = 1
+        hasMore = true
+        products = []
+        errorMessage = nil
+        isLoading = false
+        isLoadingMore = false
+        Task {
+            await loadProducts(force: true)
+        }
+    }
 }
 
 #Preview {
-    Products()
+    Products(mainCategory: "المفصلات", subCategory: "مفصلات")
         .environmentObject(FavoritesManager())
         .environmentObject(NotificationsManager())
 }

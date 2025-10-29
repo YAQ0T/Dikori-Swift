@@ -17,7 +17,7 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selection) {
-            Products()
+            Products(mainCategory: nil, subCategory: nil)
                 .tabItem {
                     Label("المتجر",
                           systemImage: selection == .shop
