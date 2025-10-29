@@ -562,9 +562,9 @@ private struct CategoryProductsView: View {
             let query = ProductQuery(
                 page: pageToLoad,
                 limit: pageSize,
-                search: activeSearchQuery.isEmpty ? nil : activeSearchQuery,
                 mainCategory: mainCategory,
-                subCategory: subCategory
+                subCategory: subCategory,
+                search: activeSearchQuery.isEmpty ? nil : activeSearchQuery
             )
             let fetched = try await ProductService.shared.fetchProducts(query: query)
 
