@@ -9,7 +9,7 @@ import SwiftUI
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case shop, favorites, account
+        case shop, categories, favorites, account
     }
 
     @EnvironmentObject private var appearanceManager: AppearanceManager
@@ -25,6 +25,15 @@ struct MainTabView: View {
                           : "bag")
                 }
                 .tag(Tab.shop)
+
+            CategoriesView()
+                .tabItem {
+                    Label("التصنيفات",
+                          systemImage: selection == .categories
+                          ? "square.grid.2x2.fill"
+                          : "square.grid.2x2")
+                }
+                .tag(Tab.categories)
 
             FavoritesView()
                 .tabItem {
