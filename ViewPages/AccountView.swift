@@ -18,7 +18,6 @@ struct AccountView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
-                    settingsSection
                     profileSection
                     ordersSection
                     notificationsSection
@@ -41,57 +40,58 @@ struct AccountView: View {
     @ViewBuilder
     private var profileSection: some View {
         cardContainer(title: "الملف الشخصي") {
-            if let user {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(user.name)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    if let phone = user.phone, !phone.isEmpty {
-                        Label(phone, systemImage: "phone.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                if let user {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(user.name)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                        if let phone = user.phone, !phone.isEmpty {
+                            Label(phone, systemImage: "phone.fill")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        if let email = user.email, !email.isEmpty {
+                            Label(email, systemImage: "envelope.fill")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        if let role = user.role, !role.isEmpty {
+                            Label(role, systemImage: "person.badge.shield.checkmark.fill")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    if let email = user.email, !email.isEmpty {
-                        Label(email, systemImage: "envelope.fill")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    if let role = user.role, !role.isEmpty {
-                        Label(role, systemImage: "person.badge.shield.checkmark.fill")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            } else {
-                Text("لم يتم تسجيل الدخول")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var settingsSection: some View {
-        cardContainer(title: "الإعدادات") {
-            NavigationLink {
-                SettingsView()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "gearshape.fill")
-                        .imageScale(.large)
-                        .foregroundColor(.accentColor)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("إدارة الإعدادات")
-                            .font(.headline)
-                        Text("تخصيص المظهر والوصول إلى الدعم.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.left")
+                } else {
+                    Text("لم يتم تسجيل الدخول")
+                        .font(.headline)
                         .foregroundColor(.secondary)
                 }
-                .padding(.vertical, 4)
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "gearshape.fill")
+                            .imageScale(.large)
+                            .foregroundColor(.accentColor)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("إدارة الإعدادات")
+                                .font(.headline)
+                            Text("تخصيص المظهر والوصول إلى الدعم.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
