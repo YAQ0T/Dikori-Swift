@@ -91,6 +91,34 @@ final class ProductService {
         return try decoder.decode([Product].self, from: data)
     }
 
+    func fetchCategoryGroups(limit: Int = 500) async throws -> [ProductCategoryGroup] {
+        var query = ProductQuery()
+        query.limit = limit
+
+        let products = try await fetchProducts(query: query)
+        let grouped = Dictionary(grouping: products) { product in
+            product.mainCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return grouped
+            .map { key, products in
+                let subCategories = Array(
+                    Set(
+                        products
+                            .map { $0.subCategory.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .filter { !$0.isEmpty }
+                    )
+                )
+                return ProductCategoryGroup(
+                    mainCategory: key,
+                    subCategories: subCategories
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+            }
+    }
+
     struct ProductDetailsResponse: Decodable {
         let product: Product
         let variants: [ProductVariant]
