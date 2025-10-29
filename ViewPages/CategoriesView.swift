@@ -101,7 +101,7 @@ struct CategoriesView: View {
 
     private var categoriesList: some View {
         List {
-            ForEach(categories) { category in
+            ForEach(categories, id: \.id) { category in
                 NavigationLink {
                     SubCategoryListView(category: category)
                         .environmentObject(favoritesManager)
