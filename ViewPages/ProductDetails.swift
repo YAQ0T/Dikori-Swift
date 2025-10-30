@@ -21,10 +21,12 @@ struct ProductDetails: View {
     @State private var loadError: String?
 
     @State private var quantity: Int = 1
+    @State private var pendingQuantity: Int = 1
     @State private var isFav: Bool = false
     @State private var selectedColor: String?
     @State private var selectedMeasure: String?
     @State private var isAddingToCart = false
+    @State private var isQuantitySheetPresented = false
 
     private let fallbackImageURL = URL(string: "https://i.imgur.com/KKPpSNy.png")!
 
@@ -179,6 +181,11 @@ struct ProductDetails: View {
             }
             .onReceive(favoritesManager.$favorites) { _ in
                 updateFavoriteState()
+            }
+            .sheet(isPresented: $isQuantitySheetPresented) {
+                quantitySelectionSheet
+                    .presentationDetents([.height(260)])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
@@ -383,7 +390,9 @@ struct ProductDetails: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
-                    addToCart()
+                    guard !isAddingToCart else { return }
+                    pendingQuantity = max(1, quantity)
+                    isQuantitySheetPresented = true
                 } label: {
                     HStack {
                         if isAddingToCart {
@@ -408,8 +417,7 @@ struct ProductDetails: View {
     }
 
     private var totalPrice: Double? {
-        guard let unitPrice = currentPrice else { return nil }
-        return unitPrice * Double(quantity)
+        totalPrice(for: quantity)
     }
 
     private var loadingState: some View {
@@ -482,19 +490,27 @@ struct ProductDetails: View {
 
     // MARK: - Actions
 
-    private func addToCart() {
+    private func addToCart(quantity selectedQuantity: Int) {
         guard !isAddingToCart, let product = currentProduct, let variant = selectedVariant else { return }
 
         isAddingToCart = true
 
         let unitPrice = currentPrice ?? variant.price.effectiveAmount
-        cartManager.add(product: product, variant: variant, quantity: quantity, unitPrice: unitPrice ?? 0)
+        cartManager.add(product: product, variant: variant, quantity: selectedQuantity, unitPrice: unitPrice ?? 0)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             withAnimation(.easeInOut) {
                 isAddingToCart = false
             }
         }
+    }
+
+    private func finalizeAddToCart() {
+        guard !isAddingToCart else { return }
+        let selectedQuantity = max(1, pendingQuantity)
+        quantity = selectedQuantity
+        isQuantitySheetPresented = false
+        addToCart(quantity: selectedQuantity)
     }
 
     // MARK: - Helpers
@@ -505,6 +521,96 @@ struct ProductDetails: View {
         formatter.currencyCode = "ILS"
         formatter.locale = Locale(identifier: "ar")
         return formatter.string(from: amount as NSNumber) ?? "\(amount) ILS"
+    }
+
+    private var effectiveUnitPrice: Double? {
+        currentPrice ?? selectedVariant?.price.effectiveAmount
+    }
+
+    private func totalPrice(for quantity: Int) -> Double? {
+        guard let unitPrice = effectiveUnitPrice else { return nil }
+        return unitPrice * Double(quantity)
+    }
+
+    private var quantitySelectionSheet: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("اختر الكمية")
+                    .font(.headline)
+                if let product = currentProduct {
+                    Text(product.displayName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            HStack(spacing: 16) {
+                Button {
+                    pendingQuantity = max(1, pendingQuantity - 1)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 18, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                Text("\(pendingQuantity)")
+                    .font(.title3.weight(.semibold))
+                    .frame(minWidth: 50)
+
+                Button {
+                    pendingQuantity += 1
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+
+            if let total = totalPrice(for: pendingQuantity) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("الإجمالي المتوقع")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formattedPrice(total))
+                        .font(.headline)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button(role: .cancel) {
+                    isQuantitySheetPresented = false
+                } label: {
+                    Text("إلغاء")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    finalizeAddToCart()
+                } label: {
+                    if isAddingToCart {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("أضِف إلى السلة")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isAddingToCart)
+            }
+            .padding(.top, 6)
+        }
+        .padding(24)
     }
 
     private func ensureDefaultSelections(for variants: [ProductVariant]? = nil) {
