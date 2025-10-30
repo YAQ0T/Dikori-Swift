@@ -567,13 +567,12 @@ private struct CategoryProductsView: View {
                 search: activeSearchQuery.isEmpty ? nil : activeSearchQuery
             )
             let fetched = try await ProductService.shared.fetchProducts(query: query)
+            let sanitizedBatch = [Product]().mergingUnique(with: fetched)
 
             if pageToLoad == 1 {
-                products = fetched
+                products = sanitizedBatch
             } else {
-                let existingIDs = Set(products.map(\.id))
-                let newItems = fetched.filter { !existingIDs.contains($0.id) }
-                products.append(contentsOf: newItems)
+                products = products.mergingUnique(with: sanitizedBatch)
             }
 
             favoritesManager.sync(with: products)
