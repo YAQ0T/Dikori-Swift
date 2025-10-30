@@ -154,6 +154,7 @@ struct ProductDetails: View {
                         Image(systemName: isFav ? "heart.fill" : "heart")
                             .font(.headline)
                             .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(isFav ? Color.red : Color.pink)
                     }
                 }
             }

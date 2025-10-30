@@ -55,10 +55,10 @@ struct ProductCard: View {
                             .imageScale(.medium)
                             .font(.title3)
                             .padding(10)
-                            .foregroundStyle(isFavorite ? Color.red : Color.primary)
+                            .foregroundStyle(isFavorite ? Color.red : Color.pink)
                             .background(
                                 Circle()
-                                    .fill((isFavorite ? Color.red.opacity(0.15) : Color.black.opacity(0.05)))
+                                    .fill(isFavorite ? Color.red.opacity(0.15) : Color.pink.opacity(0.12))
                             )
                     }
                     .buttonStyle(.plain)
