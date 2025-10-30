@@ -1,7 +1,7 @@
 import Foundation
 
 struct CartItem: Identifiable, Codable, Hashable {
-    struct MatchingKey: Hashable {
+    struct MatchingKey: Hashable, Codable {
         let productID: String
         let variantID: String?
         let colorName: String?
