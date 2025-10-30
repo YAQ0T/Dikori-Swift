@@ -12,6 +12,7 @@ public struct Products: View {
     @EnvironmentObject private var notificationsManager: NotificationsManager
     @EnvironmentObject private var sessionManager: SessionManager
     @EnvironmentObject private var appearanceManager: AppearanceManager
+    @EnvironmentObject private var cartManager: CartManager
 
     @State private var searchText: String = ""
     @FocusState private var isSearching: Bool
@@ -40,12 +41,13 @@ public struct Products: View {
     ]
 
     private enum ActiveSheet: Identifiable {
-        case favorites, notifications
+        case favorites, notifications, cart
 
         var id: Int {
             switch self {
             case .favorites: return 0
             case .notifications: return 1
+            case .cart: return 2
             }
         }
     }
@@ -175,6 +177,18 @@ public struct Products: View {
                     }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
+
+                case .cart:
+                    NavigationStack {
+                        CartView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("إغلاق") { activeSheet = nil }
+                                }
+                            }
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                 }
             }
             .onChange(of: searchText) { _, newValue in
@@ -214,6 +228,8 @@ public struct Products: View {
     private var header: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
+                cartButton
+
                 // شريط البحث بكبسولة
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").opacity(0.6)
@@ -234,6 +250,7 @@ public struct Products: View {
                 .padding(.vertical, 8)
                 .background(.ultraThinMaterial)
                 .clipShape(Capsule())
+                .frame(maxWidth: .infinity)
 
                 Menu {
                     Button {
@@ -302,6 +319,38 @@ public struct Products: View {
                 .fill(Color.gray.opacity(0.2))
                 .frame(height: 1)
         }
+    }
+
+    private var cartButton: some View {
+        Button {
+            activeSheet = .cart
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: cartManager.totalItems > 0 ? "cart.fill" : "cart")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+
+                if cartManager.totalItems > 0 {
+                    Text("\(cartManager.totalItems)")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(Color.accentColor.opacity(0.9))
+                        )
+                        .foregroundStyle(Color.white)
+                        .offset(x: 10, y: -8)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            Text(
+                cartManager.totalItems > 0
+                    ? "السلة تحتوي \(cartManager.totalItems) عناصر"
+                    : "السلة"
+            )
+        )
     }
 
     // MARK: - Empty State
@@ -460,4 +509,5 @@ public struct Products: View {
     Products()
         .environmentObject(FavoritesManager())
         .environmentObject(NotificationsManager())
+        .environmentObject(CartManager.preview())
 }

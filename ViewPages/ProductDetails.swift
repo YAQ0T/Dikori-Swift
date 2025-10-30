@@ -14,6 +14,7 @@ struct ProductDetails: View {
     private let initialProduct: Product?
 
     @EnvironmentObject private var favoritesManager: FavoritesManager
+    @EnvironmentObject private var cartManager: CartManager
     @State private var product: Product?
     @State private var variants: [ProductVariant] = []
     @State private var isFetchingDetails = false
@@ -482,24 +483,17 @@ struct ProductDetails: View {
     // MARK: - Actions
 
     private func addToCart() {
-        guard !isAddingToCart, let variant = selectedVariant else { return }
+        guard !isAddingToCart, let product = currentProduct, let variant = selectedVariant else { return }
 
         isAddingToCart = true
 
-        let payload: [String: Any] = [
-            "productId": productID,
-            "variantId": variant.id,
-            "color": variant.colorName,
-            "measure": variant.displayMeasure,
-            "unitPrice": currentPrice ?? 0,
-            "quantity": quantity,
-            "total": (currentPrice ?? 0) * Double(quantity)
-        ]
+        let unitPrice = currentPrice ?? variant.price.effectiveAmount
+        cartManager.add(product: product, variant: variant, quantity: quantity, unitPrice: unitPrice ?? 0)
 
-        debugPrint("Add to cart payload:", payload)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            isAddingToCart = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.easeInOut) {
+                isAddingToCart = false
+            }
         }
     }
 
@@ -709,4 +703,5 @@ struct FlowLayout: Layout {
 #Preview {
     ProductDetails(product: Product(id: "demo"))
         .environmentObject(FavoritesManager())
+        .environmentObject(CartManager.preview())
 }
