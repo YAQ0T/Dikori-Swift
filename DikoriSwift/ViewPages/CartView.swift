@@ -36,7 +36,8 @@ struct CartView: View {
                         item: item,
                         formattedPrice: cartManager.formattedPrice,
                         onIncrease: { cartManager.increaseQuantity(for: item.id) },
-                        onDecrease: { cartManager.decreaseQuantity(for: item.id) }
+                        onDecrease: { cartManager.decreaseQuantity(for: item.id) },
+                        onUpdateQuantity: { cartManager.updateQuantity(for: item.id, to: $0) }
                     )
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
@@ -92,6 +93,10 @@ private struct CartItemRow: View {
     let formattedPrice: (Double) -> String
     let onIncrease: () -> Void
     let onDecrease: () -> Void
+    let onUpdateQuantity: (Int) -> Void
+
+    @State private var quantityText: String = ""
+    @FocusState private var isQuantityFieldFocused: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -168,9 +173,25 @@ private struct CartItemRow: View {
             }
             .buttonStyle(.borderless)
 
-            Text("\(item.quantity)")
+            TextField("", text: $quantityText)
                 .font(.body.monospacedDigit())
-                .frame(minWidth: 32)
+                .frame(minWidth: 36)
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .focused($isQuantityFieldFocused)
+                .submitLabel(.done)
+                .onSubmit(commitQuantityChange)
+                .onChange(of: isQuantityFieldFocused) { isFocused in
+                    if !isFocused {
+                        commitQuantityChange()
+                    }
+                }
+                .onChange(of: quantityText) { newValue in
+                    let filtered = newValue.filter { $0.isNumber }
+                    if filtered != newValue {
+                        quantityText = filtered
+                    }
+                }
 
             Button(action: onIncrease) {
                 Image(systemName: "plus")
@@ -185,6 +206,25 @@ private struct CartItemRow: View {
             Capsule()
                 .stroke(Color.secondary.opacity(0.2))
         )
+        .onAppear(perform: syncQuantityText)
+        .onChange(of: item.quantity) { _ in
+            syncQuantityText()
+        }
+    }
+
+    private func syncQuantityText() {
+        quantityText = String(item.quantity)
+    }
+
+    private func commitQuantityChange() {
+        guard let value = Int(quantityText), value > 0 else {
+            syncQuantityText()
+            return
+        }
+        if value != item.quantity {
+            onUpdateQuantity(value)
+        }
+        syncQuantityText()
     }
 }
 
