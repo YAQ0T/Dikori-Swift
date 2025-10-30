@@ -58,6 +58,7 @@ struct MainTabView: View {
         .environmentObject(NotificationsManager.preview())
         .environmentObject(OrdersManager.preview())
         .environmentObject(AppearanceManager.preview)
+        .environmentObject(CartManager.preview())
 }
 
 private extension View {
