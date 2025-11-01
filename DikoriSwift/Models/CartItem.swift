@@ -23,6 +23,8 @@ struct CartItem: Identifiable, Codable, Hashable {
     let imageURL: URL?
     let colorName: String?
     let measure: String?
+    let productName: LocalizedText
+    let sku: String?
     var unitPrice: Double
     var quantity: Int
     let matchingKey: MatchingKey
@@ -36,6 +38,8 @@ struct CartItem: Identifiable, Codable, Hashable {
         imageURL: URL? = nil,
         colorName: String? = nil,
         measure: String? = nil,
+        productName: LocalizedText = LocalizedText(),
+        sku: String? = nil,
         unitPrice: Double,
         quantity: Int,
         matchingKey: MatchingKey
@@ -48,6 +52,9 @@ struct CartItem: Identifiable, Codable, Hashable {
         self.imageURL = imageURL
         self.colorName = colorName
         self.measure = measure
+        self.productName = productName
+        let trimmedSKU = sku?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.sku = trimmedSKU?.isEmpty == true ? nil : trimmedSKU
         self.unitPrice = unitPrice
         self.quantity = max(1, quantity)
         self.matchingKey = matchingKey
@@ -69,6 +76,8 @@ struct CartItem: Identifiable, Codable, Hashable {
             imageURL: variant?.primaryImageURL ?? product.primaryImageURL,
             colorName: variant?.colorName,
             measure: variant?.displayMeasure,
+            productName: product.name,
+            sku: variant?.stock?.sku,
             unitPrice: unitPrice,
             quantity: quantity,
             matchingKey: key
@@ -94,5 +103,29 @@ extension CartItem.MatchingKey {
             self.variantID == variantID &&
             self.colorName == normalizedColor &&
             self.measure == normalizedMeasure
+    }
+}
+
+extension CartItem {
+    func asOrderRequestItem() -> OrderService.CashOnDeliveryOrderRequest.Item {
+        let sanitizedName: LocalizedText? = {
+            let trimmedArabic = productName.ar.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedHebrew = productName.he.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedArabic.isEmpty && trimmedHebrew.isEmpty {
+                return nil
+            }
+            return LocalizedText(ar: trimmedArabic, he: trimmedHebrew)
+        }()
+
+        return OrderService.CashOnDeliveryOrderRequest.Item(
+            productId: productID,
+            variantId: variantID,
+            quantity: quantity,
+            name: sanitizedName,
+            color: colorName,
+            measure: measure,
+            sku: sku,
+            image: imageURL?.absoluteString
+        )
     }
 }

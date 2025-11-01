@@ -2,13 +2,16 @@ import Foundation
 
 enum OrderServiceError: LocalizedError {
     case invalidResponse
-    case statusCode(Int)
+    case statusCode(Int, message: String?)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "استجابة غير صالحة من الخادم"
-        case .statusCode(let code):
+        case .statusCode(let code, let message):
+            if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return message
+            }
             return "الخادم أعاد رمز الخطأ \(code)"
         }
     }
@@ -39,7 +42,12 @@ final class OrderService {
         }
 
         self.decoder = ISO8601Decoder.makeDecoder()
-        self.encoder = JSONEncoder()
+        self.encoder = OrderService.makeEncoder()
+    }
+
+    private static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        return encoder
     }
 
     func fetchMyOrders(token overrideToken: String? = nil) async throws -> [Order] {
@@ -57,16 +65,14 @@ final class OrderService {
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
-            throw OrderServiceError.statusCode(httpResponse.statusCode)
+            throw OrderServiceError.statusCode(httpResponse.statusCode, message: nil)
         }
 
         return try decoder.decode([Order].self, from: data)
     }
 
     func createCashOnDeliveryOrder(
-        address: String,
-        notes: String?,
-        items: [CashOnDeliveryOrderItem],
+        _ requestBody: CashOnDeliveryOrderRequest,
         token overrideToken: String? = nil
     ) async throws -> Order {
         let endpoint = baseURL.appendingPathComponent("api/orders")
@@ -77,12 +83,7 @@ final class OrderService {
 
         applyAuthenticationIfNeeded(to: &request, overrideToken: overrideToken)
 
-        let body = CashOnDeliveryOrderRequest(
-            address: address,
-            notes: notes,
-            items: items
-        )
-        request.httpBody = try encoder.encode(body)
+        request.httpBody = try encoder.encode(requestBody)
 
         let (data, response) = try await session.data(for: request)
 
@@ -91,7 +92,17 @@ final class OrderService {
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
-            throw OrderServiceError.statusCode(httpResponse.statusCode)
+            let serverMessage: String? = {
+                if let decoded = try? decoder.decode(ServerErrorResponse.self, from: data) {
+                    return decoded.message
+                }
+                if let rawString = String(data: data, encoding: .utf8) {
+                    let trimmed = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return trimmed.isEmpty ? nil : trimmed
+                }
+                return nil
+            }()
+            throw OrderServiceError.statusCode(httpResponse.statusCode, message: serverMessage)
         }
 
         return try decoder.decode(Order.self, from: data)
@@ -105,63 +116,89 @@ final class OrderService {
 }
 
 extension OrderService {
-    struct CashOnDeliveryOrderItem: Encodable {
-        let productId: String
-        let variantId: String?
-        let name: LocalizedText?
-        let quantity: Int
-        let color: String?
-        let measure: String?
-        let sku: String?
-        let image: String?
+    struct CashOnDeliveryOrderRequest: Encodable {
+        struct Item: Encodable {
+            let productId: String
+            let variantId: String?
+            let quantity: Int
+            let name: LocalizedText?
+            let color: String?
+            let measure: String?
+            let sku: String?
+            let image: String?
 
-        init(
-            productId: String,
-            variantId: String? = nil,
-            name: LocalizedText? = nil,
-            quantity: Int,
-            color: String? = nil,
-            measure: String? = nil,
-            sku: String? = nil,
-            image: String? = nil
-        ) {
-            self.productId = productId
-            let trimmedVariantId = variantId?.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.variantId = trimmedVariantId?.isEmpty == true ? nil : trimmedVariantId
-            self.name = name
-            self.quantity = max(1, quantity)
-            let trimmedColor = color?.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.color = trimmedColor?.isEmpty == true ? nil : trimmedColor
-            let trimmedMeasure = measure?.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.measure = trimmedMeasure?.isEmpty == true ? nil : trimmedMeasure
-            let trimmedSKU = sku?.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.sku = trimmedSKU?.isEmpty == true ? nil : trimmedSKU
-            if let image, !image.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self.image = image
-            } else {
-                self.image = nil
+            init(
+                productId: String,
+                variantId: String? = nil,
+                quantity: Int,
+                name: LocalizedText? = nil,
+                color: String? = nil,
+                measure: String? = nil,
+                sku: String? = nil,
+                image: String? = nil
+            ) {
+                self.productId = productId
+                self.variantId = Item.sanitized(variantId)
+                self.quantity = max(1, quantity)
+                self.name = Item.sanitized(name)
+                self.color = Item.sanitized(color)
+                self.measure = Item.sanitized(measure)
+                self.sku = Item.sanitized(sku)
+                self.image = Item.sanitized(image)
+            }
+
+            private static func sanitized(_ value: String?) -> String? {
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+                    return nil
+                }
+                return trimmed
+            }
+
+            private static func sanitized(_ value: LocalizedText?) -> LocalizedText? {
+                guard let value else { return nil }
+                let trimmedArabic = value.ar.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedHebrew = value.he.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedArabic.isEmpty && trimmedHebrew.isEmpty {
+                    return nil
+                }
+                return LocalizedText(ar: trimmedArabic, he: trimmedHebrew)
             }
         }
-    }
 
-    private struct CashOnDeliveryOrderRequest: Encodable {
         let address: String
         let notes: String?
-        let items: [CashOnDeliveryOrderItem]
-        let paymentMethod: String = "cod"
+        let paymentMethod: String
+        let recaptchaToken: String?
+        let recaptchaAction: String?
+        let recaptchaMinScore: Double?
+        let items: [Item]
 
-        init(address: String, notes: String?, items: [CashOnDeliveryOrderItem]) {
+        init(
+            address: String,
+            notes: String? = nil,
+            items: [Item],
+            recaptchaToken: String? = nil,
+            recaptchaAction: String? = nil,
+            recaptchaMinScore: Double? = nil
+        ) {
             self.address = address.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             self.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
+            self.paymentMethod = "cod"
+            self.recaptchaToken = CashOnDeliveryOrderRequest.sanitized(recaptchaToken)
+            self.recaptchaAction = CashOnDeliveryOrderRequest.sanitized(recaptchaAction)
+            self.recaptchaMinScore = CashOnDeliveryOrderRequest.sanitized(recaptchaMinScore)
             self.items = items
         }
 
         enum CodingKeys: String, CodingKey {
             case address
             case notes
-            case items
             case paymentMethod
+            case items
+            case recaptchaToken
+            case recaptchaAction
+            case recaptchaMinScore
         }
 
         func encode(to encoder: Encoder) throws {
@@ -172,6 +209,33 @@ extension OrderService {
             if let notes {
                 try container.encode(notes, forKey: .notes)
             }
+            if let recaptchaToken {
+                try container.encode(recaptchaToken, forKey: .recaptchaToken)
+            }
+            if let recaptchaAction {
+                try container.encode(recaptchaAction, forKey: .recaptchaAction)
+            }
+            if let recaptchaMinScore {
+                try container.encode(recaptchaMinScore, forKey: .recaptchaMinScore)
+            }
         }
+
+        private static func sanitized(_ value: String?) -> String? {
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+                return nil
+            }
+            return trimmed
+        }
+
+        private static func sanitized(_ value: Double?) -> Double? {
+            guard let value, value.isFinite, value >= 0 else {
+                return nil
+            }
+            return value
+        }
+    }
+
+    fileprivate struct ServerErrorResponse: Decodable {
+        let message: String
     }
 }
