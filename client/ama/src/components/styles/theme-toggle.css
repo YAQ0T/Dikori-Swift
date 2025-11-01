@@ -1,0 +1,9 @@
+/* تعكس حركة الـ thumb إلى اليمين ⇄ يسار */
+
+.rtl-switch {
+  direction: rtl;
+}
+
+.rtl-switch > * {
+  direction: ltr; /* نعيد المحتوى الداخلي لوضعه الطبيعي */
+}
