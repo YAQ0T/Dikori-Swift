@@ -235,7 +235,7 @@ struct CartView: View {
         let trimmedNotes = orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let requestItems = cartManager.items.map { $0.asOrderRequestItem() }
 
-        let recaptchaResult: RecaptchaResult
+        let recaptchaResult: RecaptchaManager.TokenResult
         do {
             recaptchaResult = try await RecaptchaManager.shared.generateToken()
         } catch {
