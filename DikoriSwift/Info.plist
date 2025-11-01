@@ -7,11 +7,5 @@
                 <key>NSAllowsArbitraryLoads</key>
                 <true/>
         </dict>
-        <key>RECAPTCHA_DEFAULT_ACTION</key>
-        <string>checkout</string>
-        <key>RECAPTCHA_MIN_SCORE</key>
-        <real>0.5</real>
-        <key>RECAPTCHA_SITE_KEY</key>
-        <string></string>
 </dict>
 </plist>
