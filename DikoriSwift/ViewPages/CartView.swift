@@ -235,7 +235,13 @@ struct CartView: View {
         let trimmedNotes = orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let requestItems = cartManager.items.map { $0.asOrderRequestItem() }
 
-        let recaptchaResult = try await RecaptchaManager.shared.generateToken()
+        let recaptchaResult: RecaptchaResult
+        do {
+            recaptchaResult = try await RecaptchaManager.shared.generateToken()
+        } catch {
+            presentAlert(title: "فشل التحقق", message: error.localizedDescription)
+            return
+        }
         let request = OrderService.CashOnDeliveryOrderRequest(
             address: trimmedAddress,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
