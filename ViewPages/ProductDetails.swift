@@ -127,11 +127,6 @@ struct ProductDetails: View {
         return galleryImageURLs.indices.contains(selectedImageIndex) ? selectedImageIndex : 0
     }
 
-    private var currentImageURL: URL? {
-        guard !galleryImageURLs.isEmpty else { return nil }
-        return galleryImageURLs[safeSelectedImageIndex]
-    }
-
     private var isContentAvailable: Bool {
         currentProduct != nil
     }
@@ -243,12 +238,10 @@ struct ProductDetails: View {
 
     private var heroImage: some View {
         VStack(spacing: 12) {
-            Group {
-                if let url = currentImageURL {
-                    heroAsyncImage(url: url)
-                } else {
-                    heroPlaceholder
-                }
+            if galleryImageURLs.isEmpty {
+                heroPlaceholder
+            } else {
+                heroCarousel
             }
 
             if galleryImageURLs.count > 1 {
@@ -258,16 +251,52 @@ struct ProductDetails: View {
         .padding(.horizontal)
     }
 
+    private var heroCarousel: some View {
+        ZStack(alignment: .topLeading) {
+            Color(.systemBackground)
+            TabView(
+                selection: Binding(
+                    get: { safeSelectedImageIndex },
+                    set: { selectedImageIndex = $0 }
+                )
+            ) {
+                ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
+                    heroAsyncImage(url: url)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: heroImageHeight)
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.2)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 80)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            if let currentPrice, currentPrice > 0 {
+                PriceTag(text: formattedPrice(currentPrice))
+                    .padding(12)
+            }
+        }
+        .clipShape(heroImageShape)
+        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+    }
+
     @ViewBuilder
     private func heroAsyncImage(url: URL) -> some View {
         AsyncImage(url: url) { phase in
             switch phase {
             case .success(let image):
                 heroImageContent(for: image)
-            case .empty, .failure:
-                heroPlaceholder
+            case .empty:
+                heroLoadingPlaceholder
+            case .failure:
+                heroImageErrorPlaceholder
             @unknown default:
-                heroPlaceholder
+                heroImageErrorPlaceholder
             }
         }
     }
@@ -275,26 +304,9 @@ struct ProductDetails: View {
     private func heroImageContent(for image: Image) -> some View {
         image
             .resizable()
-            .scaledToFill()
-            .frame(maxWidth: .infinity)
-            .frame(height: heroImageHeight)
-            .clipShape(heroImageShape)
-            .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
-            .overlay(alignment: .bottomLeading) {
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.2)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 80)
-                .clipShape(heroImageShape)
-            }
-            .overlay(alignment: .topLeading) {
-                if let currentPrice, currentPrice > 0 {
-                    PriceTag(text: formattedPrice(currentPrice))
-                        .padding(12)
-                }
-            }
+            .scaledToFit()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemBackground))
     }
 
     private var heroPlaceholder: some View {
@@ -307,6 +319,24 @@ struct ProductDetails: View {
         .frame(maxWidth: .infinity)
         .clipShape(heroImageShape)
         .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+    }
+
+    private var heroLoadingPlaceholder: some View {
+        ZStack {
+            Color.secondary.opacity(0.08)
+            ProgressView()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var heroImageErrorPlaceholder: some View {
+        ZStack {
+            Color.secondary.opacity(0.08)
+            Image(systemName: "photo")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var thumbnailStrip: some View {
