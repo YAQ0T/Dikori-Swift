@@ -26,11 +26,10 @@ struct ProductDetails: View {
     @State private var isFav: Bool = false
     @State private var selectedColor: String?
     @State private var selectedMeasure: String?
+    @State private var selectedImageIndex: Int = 0
     @State private var isAddingToCart = false
     @State private var isQuantitySheetPresented = false
     @FocusState private var isQuantityFieldFocused: Bool
-
-    private let fallbackImageURL = URL(string: "https://i.imgur.com/KKPpSNy.png")!
 
     init(product: Product, includeVariants: Bool = true) {
         self.productID = product.id
@@ -102,10 +101,35 @@ struct ProductDetails: View {
         selectedVariant?.price.effectiveAmount
     }
 
+    private var variantImageURLs: [URL] {
+        selectedVariant?.color.images.compactMap { URL(string: $0) } ?? []
+    }
+
+    private var productImageURLs: [URL] {
+        guard let images = currentProduct?.images else { return [] }
+        return images.compactMap { URL(string: $0) }
+    }
+
+    private var galleryImageURLs: [URL] {
+        var combined: [URL] = []
+        let variantURLs = variantImageURLs
+        combined.append(contentsOf: variantURLs)
+
+        for url in productImageURLs where !combined.contains(url) {
+            combined.append(url)
+        }
+
+        return combined
+    }
+
+    private var safeSelectedImageIndex: Int {
+        guard !galleryImageURLs.isEmpty else { return 0 }
+        return galleryImageURLs.indices.contains(selectedImageIndex) ? selectedImageIndex : 0
+    }
+
     private var currentImageURL: URL? {
-        if let url = selectedVariant?.primaryImageURL { return url }
-        if let url = currentProduct?.primaryImageURL { return url }
-        return fallbackImageURL
+        guard !galleryImageURLs.isEmpty else { return nil }
+        return galleryImageURLs[safeSelectedImageIndex]
     }
 
     private var isContentAvailable: Bool {
@@ -184,6 +208,18 @@ struct ProductDetails: View {
             .onReceive(favoritesManager.$favorites) { _ in
                 updateFavoriteState()
             }
+            .onChange(of: selectedVariant?.id) { _, _ in
+                selectedImageIndex = 0
+            }
+            .onChange(of: galleryImageURLs) { _, newValue in
+                guard !newValue.isEmpty else {
+                    selectedImageIndex = 0
+                    return
+                }
+                if !newValue.indices.contains(selectedImageIndex) {
+                    selectedImageIndex = 0
+                }
+            }
             .sheet(isPresented: $isQuantitySheetPresented) {
                 quantitySelectionSheet
                     .presentationDetents([.height(260)])
@@ -194,68 +230,155 @@ struct ProductDetails: View {
 
     // MARK: - Sections
 
+    private let heroImageHeight: CGFloat = 360
+
+    private var heroImageShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 28,
+            bottomLeadingRadius: 12,
+            bottomTrailingRadius: 12,
+            topTrailingRadius: 28
+        )
+    }
+
     private var heroImage: some View {
-        AsyncImage(url: currentImageURL) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 360)
-                    .clipped()
-                    .clipShape(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 28,
-                            bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
-                        )
-                    )
-                    .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
-                    .overlay(alignment: .bottomLeading) {
-                        LinearGradient(colors: [.clear, .black.opacity(0.2)],
-                                       startPoint: .top, endPoint: .bottom)
-                        .frame(height: 80)
-                        .clipShape(
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 0, bottomLeadingRadius: 12,
-                                bottomTrailingRadius: 12, topTrailingRadius: 0
-                            )
-                        )
-                    }
-                    .overlay(alignment: .topLeading) {
-                        if let currentPrice, currentPrice > 0 {
-                            PriceTag(text: formattedPrice(currentPrice))
-                                .padding(12)
-                        }
-                    }
+        VStack(spacing: 12) {
+            Group {
+                if let url = currentImageURL {
+                    heroAsyncImage(url: url)
+                } else {
+                    heroPlaceholder
+                }
+            }
 
-            case .empty:
-                heroPlaceholder
-
-            case .failure:
-                heroPlaceholder
-
-            @unknown default:
-                heroPlaceholder
+            if galleryImageURLs.count > 1 {
+                thumbnailStrip
             }
         }
         .padding(.horizontal)
     }
 
+    @ViewBuilder
+    private func heroAsyncImage(url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                heroImageContent(for: image)
+            case .empty, .failure:
+                heroPlaceholder
+            @unknown default:
+                heroPlaceholder
+            }
+        }
+    }
+
+    private func heroImageContent(for image: Image) -> some View {
+        image
+            .resizable()
+            .scaledToFill()
+            .frame(maxWidth: .infinity)
+            .frame(height: heroImageHeight)
+            .clipShape(heroImageShape)
+            .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+            .overlay(alignment: .bottomLeading) {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.2)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 80)
+                .clipShape(heroImageShape)
+            }
+            .overlay(alignment: .topLeading) {
+                if let currentPrice, currentPrice > 0 {
+                    PriceTag(text: formattedPrice(currentPrice))
+                        .padding(12)
+                }
+            }
+    }
+
     private var heroPlaceholder: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 24)
+            heroImageShape
                 .fill(Color.secondary.opacity(0.08))
-                .frame(height: 360)
+                .frame(height: heroImageHeight)
             ProgressView()
         }
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
-            )
+        .frame(maxWidth: .infinity)
+        .clipShape(heroImageShape)
+        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+    }
+
+    private var thumbnailStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
+                    Button {
+                        selectedImageIndex = index
+                    } label: {
+                        thumbnailContent(for: url, isSelected: index == safeSelectedImageIndex)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(thumbnailAccessibilityLabel(for: index))
+                    .accessibilityHint(index == safeSelectedImageIndex ? "الصورة الحالية" : "عرض هذه الصورة")
+                    .accessibilityAddTraits(
+                        index == safeSelectedImageIndex ? [.isButton, .isSelected] : .isButton
+                    )
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func thumbnailContent(for url: URL, isSelected: Bool) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            case .empty, .failure:
+                thumbnailPlaceholder
+            @unknown default:
+                thumbnailPlaceholder
+            }
+        }
+        .frame(width: 68, height: 68)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    isSelected ? Color.accentColor : Color.secondary.opacity(0.2),
+                    lineWidth: isSelected ? 2 : 1
+                )
         )
-        .padding(.horizontal)
+        .shadow(
+            color: isSelected ? Color.accentColor.opacity(0.25) : Color.black.opacity(0.05),
+            radius: isSelected ? 6 : 3,
+            x: 0,
+            y: isSelected ? 3 : 2
+        )
+        .contentShape(Rectangle())
+    }
+
+    private var thumbnailPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+            Image(systemName: "photo")
+                .imageScale(.medium)
+                .foregroundStyle(Color.secondary)
+        }
+    }
+
+    private func thumbnailAccessibilityLabel(for index: Int) -> String {
+        let total = galleryImageURLs.count
+        let base = "صورة المنتج رقم \(index + 1) من \(total)"
+        if index == safeSelectedImageIndex {
+            return base + ", الصورة الحالية"
+        }
+        return base
     }
 
     private var infoSection: some View {
