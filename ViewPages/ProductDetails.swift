@@ -22,11 +22,13 @@ struct ProductDetails: View {
 
     @State private var quantity: Int = 1
     @State private var pendingQuantity: Int = 1
+    @State private var pendingQuantityText: String = "1"
     @State private var isFav: Bool = false
     @State private var selectedColor: String?
     @State private var selectedMeasure: String?
     @State private var isAddingToCart = false
     @State private var isQuantitySheetPresented = false
+    @FocusState private var isQuantityFieldFocused: Bool
 
     private let fallbackImageURL = URL(string: "https://i.imgur.com/KKPpSNy.png")!
 
@@ -391,7 +393,9 @@ struct ProductDetails: View {
 
                 Button {
                     guard !isAddingToCart else { return }
-                    pendingQuantity = max(1, quantity)
+                    let baseQuantity = max(1, quantity)
+                    pendingQuantity = baseQuantity
+                    pendingQuantityText = "\(baseQuantity)"
                     isQuantitySheetPresented = true
                 } label: {
                     HStack {
@@ -507,8 +511,11 @@ struct ProductDetails: View {
 
     private func finalizeAddToCart() {
         guard !isAddingToCart else { return }
-        let selectedQuantity = max(1, pendingQuantity)
+        let enteredQuantity = Int(pendingQuantityText) ?? pendingQuantity
+        let selectedQuantity = max(1, enteredQuantity)
         quantity = selectedQuantity
+        pendingQuantity = selectedQuantity
+        pendingQuantityText = "\(selectedQuantity)"
         isQuantitySheetPresented = false
         addToCart(quantity: selectedQuantity)
     }
@@ -547,7 +554,9 @@ struct ProductDetails: View {
 
             HStack(spacing: 16) {
                 Button {
-                    pendingQuantity = max(1, pendingQuantity - 1)
+                    let newValue = max(1, pendingQuantity - 1)
+                    pendingQuantity = newValue
+                    pendingQuantityText = "\(newValue)"
                 } label: {
                     Image(systemName: "minus")
                         .font(.system(size: 18, weight: .medium))
@@ -556,12 +565,41 @@ struct ProductDetails: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
-                Text("\(pendingQuantity)")
-                    .font(.title3.weight(.semibold))
-                    .frame(minWidth: 50)
+                TextField("", text: Binding(
+                    get: { pendingQuantityText },
+                    set: { newValue in
+                        let filtered = newValue.filter { $0.isNumber }
+                        pendingQuantityText = filtered
+                        if let intValue = Int(filtered), intValue > 0 {
+                            pendingQuantity = intValue
+                        }
+                    }
+                ))
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .frame(minWidth: 60)
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .focused($isQuantityFieldFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    let committedValue = Int(pendingQuantityText) ?? pendingQuantity
+                    let sanitizedValue = max(1, committedValue)
+                    pendingQuantity = sanitizedValue
+                    pendingQuantityText = "\(sanitizedValue)"
+                }
+                .onChange(of: isQuantityFieldFocused) { _, isFocused in
+                    if !isFocused {
+                        let committedValue = Int(pendingQuantityText) ?? pendingQuantity
+                        let sanitizedValue = max(1, committedValue)
+                        pendingQuantity = sanitizedValue
+                        pendingQuantityText = "\(sanitizedValue)"
+                    }
+                }
 
                 Button {
-                    pendingQuantity += 1
+                    let newValue = pendingQuantity + 1
+                    pendingQuantity = newValue
+                    pendingQuantityText = "\(newValue)"
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 18, weight: .medium))
