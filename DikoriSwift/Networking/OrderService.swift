@@ -168,26 +168,17 @@ extension OrderService {
         let address: String
         let notes: String?
         let paymentMethod: String
-        let recaptchaToken: String?
-        let recaptchaAction: String?
-        let recaptchaMinScore: Double?
         let items: [Item]
 
         init(
             address: String,
             notes: String? = nil,
-            items: [Item],
-            recaptchaToken: String? = nil,
-            recaptchaAction: String? = nil,
-            recaptchaMinScore: Double? = nil
+            items: [Item]
         ) {
             self.address = address.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             self.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
             self.paymentMethod = "cod"
-            self.recaptchaToken = CashOnDeliveryOrderRequest.sanitized(recaptchaToken)
-            self.recaptchaAction = CashOnDeliveryOrderRequest.sanitized(recaptchaAction)
-            self.recaptchaMinScore = CashOnDeliveryOrderRequest.sanitized(recaptchaMinScore)
             self.items = items
         }
 
@@ -196,9 +187,6 @@ extension OrderService {
             case notes
             case paymentMethod
             case items
-            case recaptchaToken
-            case recaptchaAction
-            case recaptchaMinScore
         }
 
         func encode(to encoder: Encoder) throws {
@@ -209,29 +197,6 @@ extension OrderService {
             if let notes {
                 try container.encode(notes, forKey: .notes)
             }
-            if let recaptchaToken {
-                try container.encode(recaptchaToken, forKey: .recaptchaToken)
-            }
-            if let recaptchaAction {
-                try container.encode(recaptchaAction, forKey: .recaptchaAction)
-            }
-            if let recaptchaMinScore {
-                try container.encode(recaptchaMinScore, forKey: .recaptchaMinScore)
-            }
-        }
-
-        private static func sanitized(_ value: String?) -> String? {
-            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
-                return nil
-            }
-            return trimmed
-        }
-
-        private static func sanitized(_ value: Double?) -> Double? {
-            guard let value, value.isFinite, value >= 0 else {
-                return nil
-            }
-            return value
         }
     }
 
