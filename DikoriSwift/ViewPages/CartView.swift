@@ -233,27 +233,18 @@ struct CartView: View {
         }
 
         let trimmedNotes = orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let requestItems = cartManager.items.map { item in
-            OrderService.CashOnDeliveryOrderItem(
-                productId: item.productID,
-                variantId: item.variantID,
-                name: LocalizedText(ar: item.title, he: ""),
-                quantity: item.quantity,
-                color: item.colorName,
-                measure: item.measure,
-                image: item.imageURL?.absoluteString
-            )
-        }
+        let requestItems = cartManager.items.map { $0.asOrderRequestItem() }
+        let request = OrderService.CashOnDeliveryOrderRequest(
+            address: trimmedAddress,
+            notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
+            items: requestItems
+        )
 
         isPlacingOrder = true
         defer { isPlacingOrder = false }
 
         do {
-            let order = try await OrderService.shared.createCashOnDeliveryOrder(
-                address: trimmedAddress,
-                notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
-                items: requestItems
-            )
+            let order = try await OrderService.shared.createCashOnDeliveryOrder(request)
 
             await ordersManager.refresh()
 
