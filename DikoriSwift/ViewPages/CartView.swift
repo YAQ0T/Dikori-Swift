@@ -156,8 +156,8 @@ private extension CartView {
     }
 
     func handleCheckoutDismissed() {
-        if let pendingOrder {
-            createdOrder = pendingOrder
+        if let order = pendingOrder {
+            createdOrder = order
             pendingOrder = nil
             showConfirmation = true
         }
