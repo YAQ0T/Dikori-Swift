@@ -234,21 +234,10 @@ struct CartView: View {
 
         let trimmedNotes = orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let requestItems = cartManager.items.map { $0.asOrderRequestItem() }
-
-        let recaptchaResult: RecaptchaManager.TokenResult
-        do {
-            recaptchaResult = try await RecaptchaManager.shared.generateToken()
-        } catch {
-            presentAlert(title: "فشل التحقق", message: error.localizedDescription)
-            return
-        }
         let request = OrderService.CashOnDeliveryOrderRequest(
             address: trimmedAddress,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
-            items: requestItems,
-            recaptchaToken: recaptchaResult.token,
-            recaptchaAction: recaptchaResult.action,
-            recaptchaMinScore: recaptchaResult.minScore
+            items: requestItems
         )
 
         isPlacingOrder = true
