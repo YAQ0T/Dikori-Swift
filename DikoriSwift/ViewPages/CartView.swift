@@ -234,10 +234,15 @@ struct CartView: View {
 
         let trimmedNotes = orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let requestItems = cartManager.items.map { $0.asOrderRequestItem() }
+
+        let recaptchaResult = try await RecaptchaManager.shared.generateToken()
         let request = OrderService.CashOnDeliveryOrderRequest(
             address: trimmedAddress,
             notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
-            items: requestItems
+            items: requestItems,
+            recaptchaToken: recaptchaResult.token,
+            recaptchaAction: recaptchaResult.action,
+            recaptchaMinScore: recaptchaResult.minScore
         )
 
         isPlacingOrder = true

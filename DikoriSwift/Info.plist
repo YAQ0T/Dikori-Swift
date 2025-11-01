@@ -2,10 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
+        <key>NSAppTransportSecurity</key>
+        <dict>
+                <key>NSAllowsArbitraryLoads</key>
+                <true/>
+        </dict>
+        <key>RECAPTCHA_DEFAULT_ACTION</key>
+        <string>checkout</string>
+        <key>RECAPTCHA_MIN_SCORE</key>
+        <real>0.5</real>
+        <key>RECAPTCHA_SITE_KEY</key>
+        <string></string>
 </dict>
 </plist>
