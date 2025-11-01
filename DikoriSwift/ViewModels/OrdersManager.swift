@@ -1,5 +1,22 @@
 import Foundation
 
+enum OrdersManagerError: LocalizedError {
+    case notAuthenticated
+    case emptyItems
+    case missingAddress
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated:
+            return "يجب تسجيل الدخول لإجراء هذا الطلب"
+        case .emptyItems:
+            return "لا يمكن إنشاء طلب بدون عناصر"
+        case .missingAddress:
+            return "الرجاء إدخال عنوان التوصيل"
+        }
+    }
+}
+
 @MainActor
 final class OrdersManager: ObservableObject {
     @Published private(set) var orders: [Order] = []
@@ -63,6 +80,47 @@ final class OrdersManager: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    func createCashOnDeliveryOrder(
+        address: String,
+        notes: String?,
+        items: [OrderService.CreateCashOnDeliveryOrderRequest.Item],
+        recaptchaToken: String
+    ) async throws -> Order {
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAddress.isEmpty else {
+            throw OrdersManagerError.missingAddress
+        }
+
+        guard !items.isEmpty else {
+            throw OrdersManagerError.emptyItems
+        }
+
+        guard let token = authToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
+            throw OrdersManagerError.notAuthenticated
+        }
+
+        let payload = OrderService.CreateCashOnDeliveryOrderRequest(
+            recaptchaToken: recaptchaToken,
+            address: trimmedAddress,
+            notes: notes,
+            items: items
+        )
+
+        do {
+            let order = try await service.createCashOnDeliveryOrder(request: payload, token: token)
+            errorMessage = nil
+
+            if let refreshed = try? await service.fetchMyOrders(token: token) {
+                orders = refreshed
+            }
+
+            return order
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
+        }
     }
 }
 

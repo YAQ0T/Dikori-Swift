@@ -2,6 +2,13 @@ import SwiftUI
 
 struct CartView: View {
     @EnvironmentObject private var cartManager: CartManager
+    @EnvironmentObject private var ordersManager: OrdersManager
+    @EnvironmentObject private var sessionManager: SessionManager
+
+    @State private var isPresentingCheckout: Bool = false
+    @State private var pendingOrder: Order?
+    @State private var createdOrder: Order?
+    @State private var showConfirmation: Bool = false
 
     var body: some View {
         content
@@ -17,6 +24,38 @@ struct CartView: View {
                     }
                 }
             }
+            .sheet(isPresented: $isPresentingCheckout, onDismiss: handleCheckoutDismissed) {
+                NavigationStack {
+                    CheckoutView { order in
+                        pendingOrder = order
+                        withAnimation { cartManager.clear() }
+                        isPresentingCheckout = false
+                    }
+                }
+                .environmentObject(cartManager)
+                .environmentObject(ordersManager)
+                .environmentObject(sessionManager)
+            }
+            .background(
+                NavigationLink(isActive: Binding(
+                    get: { showConfirmation && createdOrder != nil },
+                    set: { newValue in
+                        if !newValue {
+                            showConfirmation = false
+                            createdOrder = nil
+                        }
+                    }
+                )) {
+                    if let order = createdOrder {
+                        OrderConfirmationView(order: order)
+                    } else {
+                        EmptyView()
+                    }
+                } label: {
+                    EmptyView()
+                }
+                .hidden()
+            )
     }
 
     @ViewBuilder
@@ -64,6 +103,25 @@ struct CartView: View {
                     Text(cartManager.formattedTotalPrice)
                         .font(.headline)
                 }
+
+                Button {
+                    isPresentingCheckout = true
+                } label: {
+                    Text(ordersManagerButtonTitle)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!canCheckout)
+
+                if sessionManager.session == nil {
+                    Text("يجب تسجيل الدخول لمتابعة الدفع عند الاستلام.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
+                }
             }
         }
         .listStyle(.insetGrouped)
@@ -85,6 +143,24 @@ struct CartView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+private extension CartView {
+    var canCheckout: Bool {
+        !cartManager.isEmpty && sessionManager.session != nil
+    }
+
+    var ordersManagerButtonTitle: String {
+        sessionManager.session == nil ? "سجل الدخول لإتمام الطلب" : "إتمام الطلب"
+    }
+
+    func handleCheckoutDismissed() {
+        if let pendingOrder {
+            createdOrder = pendingOrder
+            pendingOrder = nil
+            showConfirmation = true
+        }
     }
 }
 
@@ -232,5 +308,7 @@ private struct CartItemRow: View {
     NavigationStack {
         CartView()
             .environmentObject(CartManager.preview())
+            .environmentObject(OrdersManager.preview())
+            .environmentObject(SessionManager.preview())
     }
 }
