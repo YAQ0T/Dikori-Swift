@@ -2,6 +2,9 @@ import SwiftUI
 
 struct CartView: View {
     @EnvironmentObject private var cartManager: CartManager
+    @EnvironmentObject private var ordersManager: OrdersManager
+    @StateObject private var checkoutViewModel = CartCheckoutViewModel()
+    @State private var isShowingConfirmationAlert = false
 
     var body: some View {
         content
@@ -65,9 +68,68 @@ struct CartView: View {
                         .font(.headline)
                 }
             }
+
+            Section(header: Text("معلومات التوصيل")) {
+                TextField("عنوان التوصيل", text: $checkoutViewModel.address)
+                    .textContentType(.fullStreetAddress)
+                    .autocorrectionDisabled()
+
+                TextField("ملاحظات (اختياري)", text: $checkoutViewModel.notes, axis: .vertical)
+                    .lineLimit(1...3)
+            }
+
+            if let errorMessage = checkoutViewModel.errorMessage, !errorMessage.isEmpty {
+                Section {
+                    Text(errorMessage)
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+
+            Section {
+                Button(action: handleCheckoutTapped) {
+                    if checkoutViewModel.isSubmitting {
+                        HStack {
+                            ProgressView()
+                            Text("جارٍ إرسال الطلب")
+                                .fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Text("إتمام الطلب والدفع عند الاستلام")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(isCheckoutButtonDisabled)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
         }
         .listStyle(.insetGrouped)
         .background(Color(.systemGroupedBackground))
+        .alert("تم إرسال الطلب", isPresented: $isShowingConfirmationAlert) {
+            Button("حسنًا", role: .cancel) {}
+        } message: {
+            Text("شكرًا لك! تم استلام طلبك وسيتم التواصل معك قريبًا للتأكيد.")
+        }
+    }
+
+    private var isCheckoutButtonDisabled: Bool {
+        checkoutViewModel.isSubmitting ||
+        checkoutViewModel.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        cartManager.isEmpty
+    }
+
+    private func handleCheckoutTapped() {
+        Task {
+            let didSubmit = await checkoutViewModel.submit(cart: cartManager)
+            if didSubmit {
+                isShowingConfirmationAlert = true
+                Task { await ordersManager.refresh() }
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -232,5 +294,6 @@ private struct CartItemRow: View {
     NavigationStack {
         CartView()
             .environmentObject(CartManager.preview())
+            .environmentObject(OrdersManager.preview())
     }
 }

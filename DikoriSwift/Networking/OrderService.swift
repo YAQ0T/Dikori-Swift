@@ -1,5 +1,26 @@
 import Foundation
 
+struct CheckoutItemPayload: Codable {
+    let productId: String
+    let variantId: String?
+    let quantity: Int
+    let name: String
+    let color: String?
+    let measure: String?
+    let sku: String?
+    let image: String?
+}
+
+struct CreateOrderRequest: Codable {
+    let address: String
+    let notes: String?
+    let paymentMethod: String
+    let discount: Double?
+    let items: [CheckoutItemPayload]
+    let recaptchaToken: String
+    let recaptchaAction: String
+}
+
 enum OrderServiceError: LocalizedError {
     case invalidResponse
     case statusCode(Int)
@@ -20,6 +41,7 @@ final class OrderService {
     private let session: URLSession
     private let baseURL: URL
     private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
     weak var tokenProvider: (any AuthTokenProviding)?
 
     init(session: URLSession = .shared, baseURL: URL? = nil) {
@@ -38,6 +60,7 @@ final class OrderService {
         }
 
         self.decoder = ISO8601Decoder.makeDecoder()
+        self.encoder = JSONEncoder()
     }
 
     func fetchMyOrders(token overrideToken: String? = nil) async throws -> [Order] {
@@ -59,6 +82,46 @@ final class OrderService {
         }
 
         return try decoder.decode([Order].self, from: data)
+    }
+
+    func createCashOnDeliveryOrder(
+        address: String,
+        notes: String?,
+        items: [CheckoutItemPayload],
+        recaptchaToken: String
+    ) async throws -> Order {
+        let endpoint = baseURL.appendingPathComponent("api/orders")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        applyAuthenticationIfNeeded(to: &request, overrideToken: nil)
+
+        let cleanedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let payload = CreateOrderRequest(
+            address: address,
+            notes: (cleanedNotes?.isEmpty ?? true) ? nil : cleanedNotes,
+            paymentMethod: "cod",
+            discount: nil,
+            items: items,
+            recaptchaToken: recaptchaToken,
+            recaptchaAction: "checkout"
+        )
+
+        request.httpBody = try encoder.encode(payload)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw OrderServiceError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw OrderServiceError.statusCode(httpResponse.statusCode)
+        }
+
+        return try decoder.decode(Order.self, from: data)
     }
 
     private func applyAuthenticationIfNeeded(to request: inout URLRequest, overrideToken: String?) {

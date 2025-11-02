@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct DikoriSwiftApp: App {
+    init() {
+        RecaptchaManager.shared.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
