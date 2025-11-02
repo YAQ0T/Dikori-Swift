@@ -2,6 +2,15 @@ import SwiftUI
 
 struct CartView: View {
     @EnvironmentObject private var cartManager: CartManager
+    @EnvironmentObject private var ordersManager: OrdersManager
+
+    private let orderService: OrderService = .shared
+
+    @State private var deliveryAddress: String = ""
+    @State private var orderNotes: String = ""
+    @State private var isPlacingOrder: Bool = false
+    @State private var alertContext: AlertContext?
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         content
@@ -16,6 +25,13 @@ struct CartView: View {
                         .accessibilityLabel(Text("إفراغ السلة بالكامل"))
                     }
                 }
+            }
+            .alert(item: $alertContext) { context in
+                Alert(
+                    title: Text(context.title),
+                    message: Text(context.message),
+                    dismissButton: .default(Text("حسناً"))
+                )
             }
     }
 
@@ -65,6 +81,9 @@ struct CartView: View {
                         .font(.headline)
                 }
             }
+
+            deliveryDetailsSection
+            placeOrderSection
         }
         .listStyle(.insetGrouped)
         .background(Color(.systemGroupedBackground))
@@ -85,6 +104,131 @@ struct CartView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
+    }
+}
+
+extension CartView {
+    private enum Field: Hashable {
+        case address
+        case notes
+    }
+
+    private struct AlertContext: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
+
+    private var trimmedAddress: String {
+        deliveryAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedNotes: String {
+        orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canPlaceOrder: Bool {
+        !isPlacingOrder && !cartManager.isEmpty && !trimmedAddress.isEmpty
+    }
+
+    private var deliveryDetailsSection: some View {
+        Section(header: Text("تفاصيل التوصيل"), footer: deliveryFooter) {
+            TextField("عنوان التوصيل الكامل", text: $deliveryAddress, axis: .vertical)
+                .textInputAutocapitalization(.sentences)
+                .disableAutocorrection(false)
+                .focused($focusedField, equals: .address)
+                .submitLabel(.done)
+                .onSubmit { focusedField = nil }
+
+            TextField("ملاحظات إضافية (اختياري)", text: $orderNotes, axis: .vertical)
+                .textInputAutocapitalization(.sentences)
+                .disableAutocorrection(true)
+                .focused($focusedField, equals: .notes)
+                .submitLabel(.done)
+                .onSubmit { focusedField = nil }
+        }
+    }
+
+    private var deliveryFooter: some View {
+        Text("سيتم التواصل معك لتأكيد الطلب قبل الشحن.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+
+    private var placeOrderSection: some View {
+        Section(footer: paymentFooter) {
+            Button(action: placeOrder) {
+                if isPlacingOrder {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                } else {
+                    Text("إتمام الطلب")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .disabled(!canPlaceOrder)
+        }
+    }
+
+    private var paymentFooter: some View {
+        Text("طريقة الدفع: الدفع عند الاستلام.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+
+    private func placeOrder() {
+        guard !isPlacingOrder else { return }
+
+        let address = trimmedAddress
+        guard !address.isEmpty else {
+            alertContext = AlertContext(
+                title: "عنوان التوصيل مطلوب",
+                message: "الرجاء إدخال عنوان التوصيل لإتمام الطلب."
+            )
+            return
+        }
+
+        focusedField = nil
+        isPlacingOrder = true
+        let notes = trimmedNotes
+        let items = cartManager.items
+
+        Task {
+            do {
+                let token = try await RecaptchaManager.shared.fetchToken(action: "checkout")
+                let order = try await orderService.createCashOnDeliveryOrder(
+                    address: address,
+                    notes: notes.isEmpty ? nil : notes,
+                    items: items,
+                    recaptchaToken: token
+                )
+
+                await MainActor.run {
+                    withAnimation { cartManager.clear() }
+                    deliveryAddress = ""
+                    orderNotes = ""
+                    isPlacingOrder = false
+                    alertContext = AlertContext(
+                        title: "تم تسجيل الطلب",
+                        message: "تم إنشاء طلبك بنجاح. رقم الطلب: \(order.id)"
+                    )
+                }
+
+                Task { await ordersManager.refresh() }
+            } catch {
+                await MainActor.run {
+                    isPlacingOrder = false
+                    alertContext = AlertContext(
+                        title: "تعذّر إتمام الطلب",
+                        message: error.localizedDescription
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -232,5 +376,6 @@ private struct CartItemRow: View {
     NavigationStack {
         CartView()
             .environmentObject(CartManager.preview())
+            .environmentObject(OrdersManager.preview())
     }
 }
