@@ -80,8 +80,10 @@ final class RecaptchaManager {
     }
 
     private func execute(on client: RecaptchaClient, action: String) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            client.execute(withAction: action) { token, error in
+        let recaptchaAction = RecaptchaAction(action: action)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            client.execute(withAction: recaptchaAction) { token, error in
                 if let error {
                     continuation.resume(throwing: RecaptchaManagerError.underlying(error))
                     return
