@@ -1,14 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const nodemailer = require("nodemailer");
-const axios = require("axios");
+
+const { ensureHumanVerification } = require("../utils/humanVerification");
+
+const CONTACT_VERIFICATION_REQUIRED =
+  process.env.CONTACT_REQUIRE_HUMAN_VERIFICATION === "1";
 
 /**
  * POST /api/contact
- * Body: { name, email, message, recaptchaToken? }
+ * Body: { name, email, message, recaptchaToken?, privateAccessToken? }
  */
 router.post("/", async (req, res) => {
-  const { name, email, message, recaptchaToken } = req.body || {};
+  const { name, email, message } = req.body || {};
 
   if (!name || !email || !message) {
     return res.status(400).json({ error: "جميع الحقول مطلوبة" });
@@ -22,24 +26,12 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    // Optional reCAPTCHA verification if token + secret exist
-    if (recaptchaToken && process.env.RECAPTCHA_SECRET) {
-      try {
-        const verifyUrl = "https://www.google.com/recaptcha/api/siteverify";
-        const params = new URLSearchParams({
-          secret: process.env.RECAPTCHA_SECRET,
-          response: recaptchaToken,
-        });
-        const { data } = await axios.post(verifyUrl, params);
-        if (
-          !data?.success ||
-          (typeof data.score === "number" && data.score < 0.5)
-        ) {
-          return res.status(400).json({ error: "فشل تحقق reCAPTCHA" });
-        }
-      } catch (e) {
-        return res.status(400).json({ error: "تعذر التحقق من reCAPTCHA" });
-      }
+    const verificationPassed = await ensureHumanVerification(req, res, {
+      recaptchaAction: "contact",
+      required: CONTACT_VERIFICATION_REQUIRED,
+    });
+    if (!verificationPassed) {
+      return;
     }
 
     // Create transporter from environment (never hardcode secrets)
