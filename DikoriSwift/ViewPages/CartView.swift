@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CartView: View {
     @EnvironmentObject private var cartManager: CartManager
+    @StateObject private var checkoutViewModel = CheckoutViewModel()
 
     var body: some View {
         content
@@ -16,6 +17,13 @@ struct CartView: View {
                         .accessibilityLabel(Text("إفراغ السلة بالكامل"))
                     }
                 }
+            }
+            .alert(item: $checkoutViewModel.activeAlert) { alert in
+                Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text("حسنًا"))
+                )
             }
     }
 
@@ -65,9 +73,68 @@ struct CartView: View {
                         .font(.headline)
                 }
             }
+
+            checkoutSection
         }
         .listStyle(.insetGrouped)
         .background(Color(.systemGroupedBackground))
+    }
+
+    private var checkoutSection: some View {
+        Section(header: Text("إتمام الطلب")) {
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("عنوان التوصيل", text: $checkoutViewModel.shippingAddress, axis: .vertical)
+                    .textInputAutocapitalization(.sentences)
+                    .disabled(checkoutViewModel.isLoading)
+                    .onChange(of: checkoutViewModel.shippingAddress) { _ in
+                        checkoutViewModel.inlineError = nil
+                    }
+
+                TextField("ملاحظات إضافية", text: $checkoutViewModel.notes, axis: .vertical)
+                    .textInputAutocapitalization(.sentences)
+                    .disabled(checkoutViewModel.isLoading)
+                    .onChange(of: checkoutViewModel.notes) { _ in
+                        checkoutViewModel.inlineError = nil
+                    }
+            }
+
+            Picker("طريقة الدفع", selection: $checkoutViewModel.selectedPaymentMethod) {
+                ForEach(checkoutViewModel.paymentOptions, id: \.self) { method in
+                    Text(method.localizedTitle)
+                        .tag(method)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(checkoutViewModel.isLoading)
+            .onChange(of: checkoutViewModel.selectedPaymentMethod) { _ in
+                checkoutViewModel.inlineError = nil
+            }
+
+            if let error = checkoutViewModel.inlineError, !error.isEmpty {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(.vertical, 4)
+            }
+
+            Button {
+                Task { await checkoutViewModel.submit(using: cartManager) }
+            } label: {
+                if checkoutViewModel.isLoading {
+                    HStack {
+                        ProgressView()
+                        Text("جارٍ المعالجة...")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Text("إرسال الطلب")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .disabled(!checkoutViewModel.canSubmit(cartManager: cartManager))
+        }
     }
 
     private var emptyState: some View {
