@@ -9,6 +9,7 @@ struct AuthFlowView: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @EnvironmentObject private var notificationsManager: NotificationsManager
     @EnvironmentObject private var ordersManager: OrdersManager
+    @EnvironmentObject private var recaptchaManager: RecaptchaManager
 
     @State private var step: Step = .login
     @State private var statusMessage: String?
@@ -69,6 +70,7 @@ struct AuthFlowView: View {
             }
         }
         .onAppear {
+            recaptchaManager.prepare()
             notificationsManager.authToken = sessionManager.authToken
             ordersManager.authToken = sessionManager.authToken
         }
@@ -95,8 +97,18 @@ struct AuthFlowView: View {
     }
 
     private func performLogin(phone: String, password: String) async throws {
-        try await sessionManager.login(phone: phone, password: password)
-        statusMessage = nil
+        do {
+            let token = try await recaptchaManager.fetchLoginToken()
+            try await sessionManager.login(phone: phone, password: password, recaptchaToken: token)
+            statusMessage = nil
+        } catch {
+            if let recaptchaError = error as? RecaptchaManagerError {
+                statusMessage = recaptchaError.localizedDescription
+            } else {
+                statusMessage = error.localizedDescription
+            }
+            throw error
+        }
     }
 
     private func performSignup(name: String, phone: String, password: String) async throws {
@@ -112,4 +124,5 @@ struct AuthFlowView: View {
         .environmentObject(NotificationsManager.preview())
         .environmentObject(OrdersManager.preview())
         .environmentObject(CartManager.preview())
+        .environmentObject(RecaptchaManager.preview())
 }

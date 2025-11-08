@@ -71,8 +71,8 @@ final class SessionManager: ObservableObject, AuthTokenProviding {
         }
     }
 
-    func login(phone: String, password: String) async throws {
-        let outcome = try await authService.login(phone: phone, password: password)
+    func login(phone: String, password: String, recaptchaToken: String) async throws {
+        let outcome = try await authService.login(phone: phone, password: password, recaptchaToken: recaptchaToken)
         switch outcome {
         case .success(let session):
             try persist(session: session)

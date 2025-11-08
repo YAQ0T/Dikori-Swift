@@ -14,6 +14,7 @@ struct ContentView: View {
     @StateObject private var ordersManager = OrdersManager()
     @StateObject private var appearanceManager = AppearanceManager()
     @StateObject private var cartManager = CartManager()
+    @StateObject private var recaptchaManager = RecaptchaManager()
 
     var body: some View {
         AuthFlowView()
@@ -23,6 +24,7 @@ struct ContentView: View {
             .environmentObject(ordersManager)
             .environmentObject(appearanceManager)
             .environmentObject(cartManager)
+            .environmentObject(recaptchaManager)
             .preferredColorScheme(appearanceManager.activeScheme)
     }
 }

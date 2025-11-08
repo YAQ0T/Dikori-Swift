@@ -77,17 +77,23 @@ final class AuthService {
         }
     }
 
-    func login(phone: String, password: String) async throws -> LoginOutcome {
+    func login(phone: String, password: String, recaptchaToken: String) async throws -> LoginOutcome {
         let endpoint = baseURL.appendingPathComponent("api/auth/login")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let payload = [
+        var payload: [String: Any] = [
             "phone": phone,
-            "password": password
+            "password": password,
+            "recaptchaToken": recaptchaToken
         ]
+
+        if recaptchaToken.isEmpty {
+            payload.removeValue(forKey: "recaptchaToken")
+        }
+
         request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
 
         let (data, response) = try await session.data(for: request)
