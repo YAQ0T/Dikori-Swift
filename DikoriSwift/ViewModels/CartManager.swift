@@ -3,10 +3,27 @@ import SwiftUI
 
 @MainActor
 final class CartManager: ObservableObject {
-    @Published private(set) var items: [CartItem]
+    struct CheckoutLineItem: Hashable, Codable {
+        let productId: String
+        let variantId: String?
+        let quantity: Int
+        let localizedName: [String: String]
+        let color: String?
+        let measure: String?
+        let sku: String?
+        let image: String?
+    }
 
-    init(items: [CartItem] = []) {
+    struct CheckoutDiscount: Hashable, Codable {
+        let ruleId: String
+    }
+
+    @Published private(set) var items: [CartItem]
+    @Published var appliedDiscountRuleID: String?
+
+    init(items: [CartItem] = [], appliedDiscountRuleID: String? = nil) {
         self.items = items
+        self.appliedDiscountRuleID = appliedDiscountRuleID
     }
 
     var isEmpty: Bool { items.isEmpty }
@@ -67,6 +84,38 @@ final class CartManager: ObservableObject {
 
     func clear() {
         items.removeAll()
+        appliedDiscountRuleID = nil
+    }
+
+    func setDiscountRule(id: String?) {
+        appliedDiscountRuleID = id
+    }
+
+    var checkoutLineItems: [CheckoutLineItem] {
+        items.map { item in
+            var localizedName: [String: String] = ["ar": item.title]
+            let trimmedSubtitle = item.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedSubtitle.isEmpty {
+                localizedName["he"] = trimmedSubtitle
+            }
+
+            CheckoutLineItem(
+                productId: item.productID,
+                variantId: item.variantID,
+                quantity: item.quantity,
+                localizedName: localizedName,
+                color: item.colorName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                measure: item.measure?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                sku: nil,
+                image: item.imageURL?.absoluteString
+            )
+        }
+    }
+
+    var checkoutDiscount: CheckoutDiscount? {
+        guard let appliedDiscountRuleID = appliedDiscountRuleID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !appliedDiscountRuleID.isEmpty else { return nil }
+        return CheckoutDiscount(ruleId: appliedDiscountRuleID)
     }
 
     func formattedPrice(_ amount: Double) -> String {
