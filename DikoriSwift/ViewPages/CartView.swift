@@ -476,8 +476,6 @@ private struct CartItemRow: View {
 }
 
 private enum CheckoutConfiguration {
-    private static let defaultRecaptchaSiteKey = "6LcENrsrAAAAALomNaP-d0iFoJIIglAqX2uWfMWH"
-
     static var recaptchaSiteKey: String? {
         if let envValue = ProcessInfo.processInfo.environment["RECAPTCHA_SITE_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !envValue.isEmpty {
@@ -491,7 +489,7 @@ private enum CheckoutConfiguration {
             }
         }
 
-        return defaultRecaptchaSiteKey
+        return nil
     }
 
     static var recaptchaMinScore: Double? {
