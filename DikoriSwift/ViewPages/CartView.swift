@@ -1,7 +1,22 @@
 import SwiftUI
+import RecaptchaEnterprise
 
 struct CartView: View {
     @EnvironmentObject private var cartManager: CartManager
+    @EnvironmentObject private var ordersManager: OrdersManager
+
+    @State private var shippingAddress: String = ""
+    @State private var orderNotes: String = ""
+    @State private var isPlacingOrder: Bool = false
+    @State private var submissionError: String?
+    @State private var createdOrder: Order?
+    @State private var showSuccessAlert: Bool = false
+
+    @State private var recaptchaClient: RecaptchaClient?
+    @State private var isRecaptchaInitializing: Bool = false
+    @State private var recaptchaError: String?
+
+    @FocusState private var isAddressFieldFocused: Bool
 
     var body: some View {
         content
@@ -17,6 +32,19 @@ struct CartView: View {
                     }
                 }
             }
+            .task {
+                await initializeRecaptchaClientIfNeeded()
+            }
+            .alert("تم إرسال الطلب", isPresented: $showSuccessAlert, presenting: createdOrder) { order in
+                Button("حسنًا") { showSuccessAlert = false }
+            } message: { order in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("تم استلام طلبك بنجاح.")
+                    Text("رقم الطلب: \(order.id)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
     }
 
     @ViewBuilder
@@ -30,44 +58,151 @@ struct CartView: View {
 
     private var listContent: some View {
         List {
-            Section {
-                ForEach(cartManager.items) { item in
-                    CartItemRow(
-                        item: item,
-                        formattedPrice: cartManager.formattedPrice,
-                        onIncrease: { cartManager.increaseQuantity(for: item.id) },
-                        onDecrease: { cartManager.decreaseQuantity(for: item.id) },
-                        onUpdateQuantity: { cartManager.updateQuantity(for: item.id, to: $0) }
-                    )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            withAnimation { cartManager.remove(itemID: item.id) }
-                        } label: {
-                            Label("حذف", systemImage: "trash")
-                        }
-                    }
-                }
-                .onDelete(perform: cartManager.removeItems)
-            }
-
-            Section(header: Text("ملخص")) {
-                HStack {
-                    Text("عدد العناصر")
-                    Spacer()
-                    Text("\(cartManager.totalItems)")
-                        .fontWeight(.semibold)
-                }
-
-                HStack {
-                    Text("الإجمالي")
-                    Spacer()
-                    Text(cartManager.formattedTotalPrice)
-                        .font(.headline)
-                }
-            }
+            itemsSection
+            summarySection
+            deliverySection
+            recaptchaSection
+            actionSection
         }
         .listStyle(.insetGrouped)
         .background(Color(.systemGroupedBackground))
+        .onChange(of: shippingAddress) { _ in
+            if submissionError != nil { submissionError = nil }
+        }
+    }
+
+    @ViewBuilder
+    private var itemsSection: some View {
+        Section {
+            ForEach(cartManager.items) { item in
+                CartItemRow(
+                    item: item,
+                    formattedPrice: cartManager.formattedPrice,
+                    onIncrease: { cartManager.increaseQuantity(for: item.id) },
+                    onDecrease: { cartManager.decreaseQuantity(for: item.id) },
+                    onUpdateQuantity: { cartManager.updateQuantity(for: item.id, to: $0) }
+                )
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        withAnimation { cartManager.remove(itemID: item.id) }
+                    } label: {
+                        Label("حذف", systemImage: "trash")
+                    }
+                }
+            }
+            .onDelete(perform: cartManager.removeItems)
+        }
+    }
+
+    private var summarySection: some View {
+        Section(header: Text("ملخص")) {
+            HStack {
+                Text("عدد العناصر")
+                Spacer()
+                Text("\(cartManager.totalItems)")
+                    .fontWeight(.semibold)
+            }
+
+            HStack {
+                Text("الإجمالي")
+                Spacer()
+                Text(cartManager.formattedTotalPrice)
+                    .font(.headline)
+            }
+        }
+    }
+
+    private var deliverySection: some View {
+        Section(header: Text("بيانات التوصيل")) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("عنوان التوصيل")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextField("أدخل عنوان التوصيل الكامل", text: $shippingAddress)
+                    .textInputAutocapitalization(.sentences)
+                    .autocorrectionDisabled(false)
+                    .focused($isAddressFieldFocused)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("ملاحظات (اختياري)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                TextEditor(text: $orderNotes)
+                    .frame(minHeight: 100)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.15))
+                    )
+            }
+        }
+    }
+
+    private var recaptchaSection: some View {
+        Section(header: Text("حماية الطلب")) {
+            if isRecaptchaInitializing {
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("جاري تهيئة reCAPTCHA...")
+                        .foregroundStyle(.secondary)
+                }
+            } else if let recaptchaError {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("تعذّر تفعيل reCAPTCHA", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+
+                    Text(recaptchaError)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Button("إعادة المحاولة") {
+                        Task { await initializeRecaptchaClientIfNeeded(force: true) }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            } else if recaptchaClient != nil {
+                Label("تم تفعيل حماية reCAPTCHA", systemImage: "checkmark.shield.fill")
+                    .foregroundStyle(.green)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("لم يتم إعداد reCAPTCHA", systemImage: "exclamationmark.shield")
+                        .foregroundStyle(.orange)
+                    Text("يرجى التأكد من ضبط قيمة RECAPTCHA_SITE_KEY في إعدادات التطبيق.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var actionSection: some View {
+        Section {
+            if let submissionError {
+                Text(submissionError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            Button(action: placeOrder) {
+                if isPlacingOrder {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .tint(.white)
+                        Spacer()
+                    }
+                } else {
+                    Text("إتمام الطلب")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(checkoutButtonDisabled)
+            .accessibilityLabel(Text("إتمام الطلب والتحقق من reCAPTCHA"))
+        }
     }
 
     private var emptyState: some View {
@@ -85,6 +220,110 @@ struct CartView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
+    }
+
+    private var trimmedAddress: String {
+        shippingAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedNotes: String? {
+        let trimmed = orderNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var checkoutButtonDisabled: Bool {
+        cartManager.isEmpty || trimmedAddress.isEmpty || isPlacingOrder || recaptchaClient == nil || isRecaptchaInitializing
+    }
+
+    @MainActor
+    private func initializeRecaptchaClientIfNeeded(force: Bool = false) async {
+        if isRecaptchaInitializing { return }
+        if !force, recaptchaClient != nil { return }
+
+        guard let siteKey = CheckoutConfiguration.recaptchaSiteKey, !siteKey.isEmpty else {
+            recaptchaClient = nil
+            recaptchaError = "لم يتم إعداد مفتاح reCAPTCHA. قم بتحديث إعدادات التطبيق." 
+            return
+        }
+
+        isRecaptchaInitializing = true
+        recaptchaError = nil
+
+        if force {
+            recaptchaClient = nil
+        }
+
+        do {
+            recaptchaClient = try await Recaptcha.fetchClient(withSiteKey: siteKey)
+        } catch let error as RecaptchaError {
+            recaptchaClient = nil
+            recaptchaError = error.errorMessage ?? error.localizedDescription
+        } catch {
+            recaptchaClient = nil
+            recaptchaError = error.localizedDescription
+        }
+
+        isRecaptchaInitializing = false
+    }
+
+    @MainActor
+    private func placeOrder() {
+        guard !cartManager.isEmpty else { return }
+
+        let address = trimmedAddress
+        guard !address.isEmpty else {
+            submissionError = "الرجاء إدخال عنوان التوصيل."
+            isAddressFieldFocused = true
+            return
+        }
+
+        guard let client = recaptchaClient else {
+            submissionError = recaptchaError ?? "تعذّر تهيئة خدمة reCAPTCHA. حاول مجددًا."
+            Task { await initializeRecaptchaClientIfNeeded(force: true) }
+            return
+        }
+
+        let items = cartManager.items
+
+        submissionError = nil
+        isPlacingOrder = true
+
+        Task {
+            do {
+                let token = try await client.execute(withAction: RecaptchaAction.login)
+                let order = try await OrderService.shared.createCODOrder(
+                    address: address,
+                    notes: trimmedNotes,
+                    items: items,
+                    recaptchaToken: token,
+                    recaptchaAction: CheckoutConfiguration.recaptchaActionName,
+                    recaptchaMinScore: CheckoutConfiguration.recaptchaMinScore
+                )
+
+                await MainActor.run {
+                    createdOrder = order
+                    showSuccessAlert = true
+                    isPlacingOrder = false
+                    submissionError = nil
+                    cartManager.clear()
+                    shippingAddress = ""
+                    orderNotes = ""
+                    isAddressFieldFocused = false
+                }
+
+                await ordersManager.loadOrders(force: true)
+            } catch let error as RecaptchaError {
+                await MainActor.run {
+                    isPlacingOrder = false
+                    submissionError = error.errorMessage ?? error.localizedDescription
+                }
+            } catch {
+                await MainActor.run {
+                    isPlacingOrder = false
+                    submissionError = error.localizedDescription
+                }
+            }
+        }
     }
 }
 
@@ -232,5 +471,50 @@ private struct CartItemRow: View {
     NavigationStack {
         CartView()
             .environmentObject(CartManager.preview())
+            .environmentObject(OrdersManager.preview())
     }
+}
+
+private enum CheckoutConfiguration {
+    private static let defaultRecaptchaSiteKey = "6LcENrsrAAAAALomNaP-d0iFoJIIglAqX2uWfMWH"
+
+    static var recaptchaSiteKey: String? {
+        if let envValue = ProcessInfo.processInfo.environment["RECAPTCHA_SITE_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !envValue.isEmpty {
+            return envValue
+        }
+
+        if let bundleValue = Bundle.main.object(forInfoDictionaryKey: "RECAPTCHA_SITE_KEY") as? String {
+            let trimmed = bundleValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+
+        return defaultRecaptchaSiteKey
+    }
+
+    static var recaptchaMinScore: Double? {
+        if let envValue = ProcessInfo.processInfo.environment["RECAPTCHA_MIN_SCORE"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let value = Double(envValue) {
+            return value
+        }
+
+        if let object = Bundle.main.object(forInfoDictionaryKey: "RECAPTCHA_MIN_SCORE") {
+            if let number = object as? NSNumber {
+                return number.doubleValue
+            }
+
+            if let stringValue = object as? String {
+                let trimmed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let value = Double(trimmed) {
+                    return value
+                }
+            }
+        }
+
+        return nil
+    }
+
+    static let recaptchaActionName: String = "login"
 }
