@@ -83,9 +83,17 @@ final class OrderService {
             throw OrderServiceError.invalidResponse
         }
 
+        let sanitizedNotes: String?
+        if let trimmedNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !trimmedNotes.isEmpty {
+            sanitizedNotes = trimmedNotes
+        } else {
+            sanitizedNotes = nil
+        }
+
         let payload = CashOnDeliveryOrderRequest(
             address: trimmedAddress,
-            notes: notes?.trimmingCharacters(in: .whitespacesAndNewlines).flatMap { $0.isEmpty ? nil : $0 },
+            notes: sanitizedNotes,
             items: items.map { CashOnDeliveryOrderRequest.Item(from: $0) }
         )
 

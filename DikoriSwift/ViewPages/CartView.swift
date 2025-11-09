@@ -348,12 +348,12 @@ private struct CartItemRow: View {
                 .focused($isQuantityFieldFocused)
                 .submitLabel(.done)
                 .onSubmit(commitQuantityChange)
-                .onChange(of: isQuantityFieldFocused) { isFocused in
-                    if !isFocused {
+                .onChange(of: isQuantityFieldFocused) { _, newValue in
+                    if !newValue {
                         commitQuantityChange()
                     }
                 }
-                .onChange(of: quantityText) { newValue in
+                .onChange(of: quantityText) { _, newValue in
                     let filtered = newValue.filter { $0.isNumber }
                     if filtered != newValue {
                         quantityText = filtered
@@ -374,7 +374,7 @@ private struct CartItemRow: View {
                 .stroke(Color.secondary.opacity(0.2))
         )
         .onAppear(perform: syncQuantityText)
-        .onChange(of: item.quantity) { _ in
+        .onChange(of: item.quantity) { _, _ in
             syncQuantityText()
         }
     }
