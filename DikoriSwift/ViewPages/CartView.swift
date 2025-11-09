@@ -1,5 +1,4 @@
 import SwiftUI
-import RecaptchaEnterprise
 
 struct CartView: View {
     @EnvironmentObject private var cartManager: CartManager
@@ -12,7 +11,7 @@ struct CartView: View {
     @State private var createdOrder: Order?
     @State private var showSuccessAlert: Bool = false
 
-    @State private var recaptchaClient: RecaptchaClient?
+    @State private var recaptchaClient: RecaptchaV3Client?
     @State private var isRecaptchaInitializing: Bool = false
     @State private var recaptchaError: String?
 
@@ -254,10 +253,10 @@ struct CartView: View {
         }
 
         do {
-            recaptchaClient = try await Recaptcha.fetchClient(withSiteKey: siteKey)
-        } catch let error as RecaptchaError {
+            recaptchaClient = try await RecaptchaV3Client.fetchClient(siteKey: siteKey)
+        } catch let error as RecaptchaV3Error {
             recaptchaClient = nil
-            recaptchaError = error.errorMessage ?? error.localizedDescription
+            recaptchaError = error.localizedDescription
         } catch {
             recaptchaClient = nil
             recaptchaError = error.localizedDescription
@@ -290,7 +289,7 @@ struct CartView: View {
 
         Task {
             do {
-                let token = try await client.execute(withAction: RecaptchaAction.login)
+                let token = try await client.execute(action: CheckoutConfiguration.recaptchaActionName)
                 let order = try await OrderService.shared.createCODOrder(
                     address: address,
                     notes: trimmedNotes,
@@ -312,10 +311,10 @@ struct CartView: View {
                 }
 
                 await ordersManager.loadOrders(force: true)
-            } catch let error as RecaptchaError {
+            } catch let error as RecaptchaV3Error {
                 await MainActor.run {
                     isPlacingOrder = false
-                    submissionError = error.errorMessage ?? error.localizedDescription
+                    submissionError = error.localizedDescription
                 }
             } catch {
                 await MainActor.run {
