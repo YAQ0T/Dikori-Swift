@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6E0226312EC079D9002CF8E5 /* RecaptchaEnterprise in Frameworks */ = {isa = PBXBuildFile; productRef = 6E0226302EC079D9002CF8E5 /* RecaptchaEnterprise */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6E65AF8E2EA7876100E9A0C8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -75,6 +79,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6E0226312EC079D9002CF8E5 /* RecaptchaEnterprise in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +144,7 @@
 			);
 			name = DikoriSwift;
 			packageProductDependencies = (
+				6E0226302EC079D9002CF8E5 /* RecaptchaEnterprise */,
 			);
 			productName = DikoriSwift;
 			productReference = 6E65AF7F2EA7876000E9A0C8 /* DikoriSwift.app */;
@@ -222,6 +228,9 @@
 			);
 			mainGroup = 6E65AF762EA7876000E9A0C8;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6E02262F2EC079D9002CF8E5 /* XCRemoteSwiftPackageReference "recaptcha-enterprise-mobile-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6E65AF802EA7876000E9A0C8 /* Products */;
 			projectDirPath = "";
@@ -616,6 +625,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6E02262F2EC079D9002CF8E5 /* XCRemoteSwiftPackageReference "recaptcha-enterprise-mobile-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/GoogleCloudPlatform/recaptcha-enterprise-mobile-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 18.8.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6E0226302EC079D9002CF8E5 /* RecaptchaEnterprise */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6E02262F2EC079D9002CF8E5 /* XCRemoteSwiftPackageReference "recaptcha-enterprise-mobile-sdk" */;
+			productName = RecaptchaEnterprise;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6E65AF772EA7876000E9A0C8 /* Project object */;
 }
