@@ -888,34 +888,21 @@ private struct ColorSwatch: View {
     let isSelected: Bool
     var onTap: () -> Void
 
-    private var swatchColor: Color {
-        switch label.lowercased() {
-        case "red": return .red
-        case "white": return .white
-        case "silver": return .gray
-        case "black": return .black
-        case "blue": return .blue
-        default: return .secondary
-        }
-    }
-
     var body: some View {
         Button(action: onTap) {
-            ZStack {
-                Circle()
-                    .fill(swatchColor.gradient)
-                    .frame(width: 34, height: 34)
-                    .overlay(Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                if label.lowercased() == "white" {
-                    Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        .frame(width: 34, height: 34)
-                }
-            }
-            .overlay(
-                Circle()
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2.5)
-                    .frame(width: 40, height: 40)
-            )
+            Text(label.capitalized)
+                .font(.subheadline).fontWeight(.medium)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: 1)
+                )
+                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text("لون \(label)"))
