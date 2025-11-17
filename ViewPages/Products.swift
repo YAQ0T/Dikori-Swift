@@ -13,6 +13,7 @@ public struct Products: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @EnvironmentObject private var appearanceManager: AppearanceManager
     @EnvironmentObject private var cartManager: CartManager
+    @StateObject private var homeViewModel = HomeViewModel()
 
     @State private var searchText: String = ""
     @FocusState private var isSearching: Bool
@@ -32,6 +33,10 @@ public struct Products: View {
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var shouldShowHomeHighlights: Bool {
+        trimmedSearchText.isEmpty && !showOnlyFavorites
     }
 
     // أعمدة الشبكة (عمودان)
@@ -101,37 +106,40 @@ public struct Products: View {
                     emptyState
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
-                            ForEach(filteredProducts) { product in
-                                // تنقّل إلى صفحة التفاصيل
-                                NavigationLink {
-                                    // مرّر المنتج الحقيقي لصفحة التفاصيل عند الربط بالـ API
-                                    ProductDetails(product: product)
-                                } label: {
-                                    // استخدم ProductCard كما بنيناه بدون سعر/سلة
-                                    ProductCard(
-                                        imageURL: product.primaryImageURL,
-                                        title: product.displayName,
-                                        subtitle: product.secondaryText,
-                                        isFavorite: favoritesManager.isFavorite(product)
-                                    ) {
-                                        toggleFavorite(for: product)
+                        VStack(spacing: 24) {
+                            if shouldShowHomeHighlights {
+                                homeHighlights
+                            }
+
+                            LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
+                                ForEach(filteredProducts) { product in
+                                    NavigationLink {
+                                        ProductDetails(product: product)
+                                    } label: {
+                                        ProductCard(
+                                            imageURL: product.primaryImageURL,
+                                            title: product.displayName,
+                                            subtitle: product.secondaryText,
+                                            isFavorite: favoritesManager.isFavorite(product)
+                                        ) {
+                                            toggleFavorite(for: product)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .task {
+                                        await loadMoreIfNeeded(current: product)
                                     }
                                 }
-                                .buttonStyle(.plain)
-                                .task {
-                                    await loadMoreIfNeeded(current: product)
-                                }
+                            }
+
+                            if isLoadingMore {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
                             }
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 20)
-
-                        if isLoadingMore {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                        }
                     }
                     .background(Color(.systemGroupedBackground))
                 }
@@ -142,9 +150,11 @@ public struct Products: View {
             .task {
                 await loadProducts()
                 await notificationsManager.loadNotifications()
+                await homeViewModel.loadInitialDataIfNeeded()
             }
             .refreshable {
                 await loadProducts(force: true)
+                await homeViewModel.refreshHighlights()
             }
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {
@@ -501,6 +511,196 @@ public struct Products: View {
         if index >= thresholdIndex {
             await loadProducts()
         }
+    }
+
+    private var homeHighlights: some View {
+        VStack(spacing: 24) {
+            browseByCategorySection
+            recommendedSection
+            newArrivalsSection
+        }
+    }
+
+    private var browseByCategorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("تصفّح حسب الفئة")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                NavigationLink {
+                    CategoriesView()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("عرض الكل")
+                        Image(systemName: "chevron.left")
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if homeViewModel.isLoadingCategories && homeViewModel.categories.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            CategoryCardPlaceholder()
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else if let error = homeViewModel.categoriesError, homeViewModel.categories.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("أعد المحاولة") {
+                        Task {
+                            await homeViewModel.reloadCategories()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else if homeViewModel.categories.isEmpty {
+                Text("لا توجد فئات جاهزة للعرض الآن، سيتم تحديثها حال توفر المنتجات.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(homeViewModel.categories) { category in
+                            NavigationLink {
+                                SubcategoryListView(category: category)
+                            } label: {
+                                CategoryCard(category: category)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
+    private var recommendedSection: some View {
+        productCarousel(
+            title: "منتجات مُقترحة لك",
+            products: homeViewModel.recommended
+        ) {
+            Task {
+                await homeViewModel.reloadCollections()
+            }
+        }
+    }
+
+    private var newArrivalsSection: some View {
+        productCarousel(
+            title: "وصل حديثًا",
+            products: homeViewModel.newArrivals
+        ) {
+            Task {
+                await homeViewModel.reloadCollections()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func productCarousel(title: String, products: [Product], retryAction: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+
+            if homeViewModel.isLoadingCollections && products.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            ProductCardPlaceholder()
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else if let error = homeViewModel.collectionsError, products.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("أعد المحاولة") {
+                        retryAction()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else if products.isEmpty {
+                Text("لا توجد عناصر في هذه المجموعة الآن.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(products) { product in
+                            NavigationLink {
+                                ProductDetails(product: product)
+                            } label: {
+                                ProductCard(
+                                    imageURL: product.primaryImageURL,
+                                    title: product.displayName,
+                                    subtitle: product.secondaryText,
+                                    isFavorite: favoritesManager.isFavorite(product)
+                                ) {
+                                    toggleFavorite(for: product)
+                                }
+                                .frame(width: 220)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+}
+
+private struct CategoryCard: View {
+    let category: CategoriesViewModel.CategorySummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(category.name)
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+            Text("\(category.subcategories.count) تصنيف فرعي")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 160, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+        )
+    }
+}
+
+private struct CategoryCardPlaceholder: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color(.systemGray5))
+            .frame(width: 160, height: 90)
+            .redacted(reason: .placeholder)
+    }
+}
+
+private struct ProductCardPlaceholder: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(Color(.systemGray5))
+            .frame(width: 220, height: 220)
+            .redacted(reason: .placeholder)
     }
 }
 
