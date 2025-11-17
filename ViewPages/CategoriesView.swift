@@ -114,7 +114,7 @@ struct CategoriesView: View {
     }
 }
 
-private struct CategoryRow: View {
+struct CategoryRow: View {
     let category: CategoriesViewModel.CategorySummary
 
     var body: some View {
@@ -138,7 +138,7 @@ private struct CategoryRow: View {
     }
 }
 
-private struct SubcategoryListView: View {
+struct SubcategoryListView: View {
     let category: CategoriesViewModel.CategorySummary
 
     var body: some View {
@@ -191,7 +191,7 @@ private struct SubcategoryListView: View {
     }
 }
 
-private struct CategoryProductsView: View {
+struct CategoryProductsView: View {
     let mainCategory: String
     let subCategory: String
 
