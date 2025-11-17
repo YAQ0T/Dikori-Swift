@@ -11,6 +11,7 @@ struct CartView: View {
     @State private var checkoutErrorMessage: String?
     @State private var submittedOrder: Order?
     @State private var isShowingSuccessAlert = false
+    @State private var isConfirmingClearCart = false
 
     @FocusState private var focusedCheckoutField: CheckoutField?
 
@@ -27,7 +28,7 @@ struct CartView: View {
                 if !cartManager.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("إفراغ السلة", role: .destructive) {
-                            withAnimation { cartManager.clear() }
+                            isConfirmingClearCart = true
                         }
                         .accessibilityLabel(Text("إفراغ السلة بالكامل"))
                     }
@@ -120,6 +121,19 @@ struct CartView: View {
             }
         } message: { order in
             Text("تم استلام طلبك وسيتم التواصل معك للتأكيد. رقم الطلب: \(order.id)")
+        }
+        .confirmationDialog(
+            "هل ترغب بإفراغ السلة؟",
+            isPresented: $isConfirmingClearCart,
+            titleVisibility: .visible
+        ) {
+            Button("إفراغ السلة", role: .destructive) {
+                withAnimation { cartManager.clear() }
+            }
+
+            Button("تراجع", role: .cancel) { }
+        } message: {
+            Text("لا يمكن التراجع عن هذه العملية بعد تأكيدها.")
         }
     }
 
