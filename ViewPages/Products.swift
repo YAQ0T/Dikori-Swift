@@ -667,31 +667,98 @@ private struct CategoryCard: View {
     let category: CategoriesViewModel.CategorySummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 8) {
+            Circle()
+                .fill(category.gradient)
+                .frame(width: 72, height: 72)
+                .overlay(
+                    Image(systemName: category.iconName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                )
+
             Text(category.name)
-                .font(.headline)
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
                 .lineLimit(2)
-            Text("\(category.subcategories.count) تصنيف فرعي")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
-        .frame(width: 160, alignment: .leading)
-        .padding(16)
+        .frame(width: 88)
+        .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 3)
         )
     }
 }
 
 private struct CategoryCardPlaceholder: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color(.systemGray5))
-            .frame(width: 160, height: 90)
-            .redacted(reason: .placeholder)
+        VStack(spacing: 8) {
+            Circle()
+                .fill(Color(.systemGray5))
+                .frame(width: 72, height: 72)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color(.systemGray5))
+                .frame(width: 56, height: 10)
+        }
+        .frame(width: 88)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemGray6))
+        )
+        .redacted(reason: .placeholder)
+    }
+}
+
+private extension CategoriesViewModel.CategorySummary {
+    var iconName: String {
+        let normalized = name.replacingOccurrences(of: " ", with: "")
+            .applyingTransform(.toLatin, reverse: false)?
+            .lowercased() ?? name.lowercased()
+
+        let matches: [(String, String)] = [
+            ("ملابس", "tshirt.fill"),
+            ("فسات", "tshirt.fill"),
+            ("رجال", "figure.stand"),
+            ("نساء", "figure.dress.line.vertical.figure"),
+            ("اطفال", "figure.and.child.holdinghands"),
+            ("طفل", "figure.and.child.holdinghands"),
+            ("أجه", "ipad.and.iphone"),
+            ("الكترون", "desktopcomputer"),
+            ("عطور", "sparkles"),
+            ("جمال", "heart.circle.fill"),
+            ("منزل", "sofa.fill"),
+            ("أثاث", "bed.double.fill"),
+            ("مطبخ", "fork.knife.circle.fill"),
+            ("أحذية", "shoeprints.fill"),
+            ("اكسسو", "bag.fill"),
+        ]
+
+        if let match = matches.first(where: { normalized.contains($0.0) }) {
+            return match.1
+        }
+
+        return "square.grid.2x2.fill"
+    }
+
+    var gradient: LinearGradient {
+        let palettes: [[Color]] = [
+            [.pink, .orange],
+            [.purple, .indigo],
+            [.blue, .teal],
+            [.green, .mint],
+            [.yellow, .orange],
+            [Color(red: 0.94, green: 0.4, blue: 0.4), Color(red: 0.99, green: 0.73, blue: 0.4)],
+            [Color(red: 0.43, green: 0.53, blue: 0.95), Color(red: 0.22, green: 0.78, blue: 0.95)]
+        ]
+
+        let index = abs(id.hashValue) % palettes.count
+        let colors = palettes[index]
+
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 
