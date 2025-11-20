@@ -28,6 +28,7 @@ public struct Products: View {
     @State private var hasMore: Bool = true
     @State private var activeSearchQuery: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var hasLoadedInitially: Bool = false
 
     private let pageSize: Int = 100
 
@@ -91,15 +92,7 @@ public struct Products: View {
         return base.sorted(by: prioritizedSorter)
     }
 
-    private var prioritizedSorter: (Product, Product) -> Bool {
-        { lhs, rhs in
-            if lhs.priority.sortOrder != rhs.priority.sortOrder {
-                return lhs.priority.sortOrder < rhs.priority.sortOrder
-            }
-
-            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
-        }
-    }
+    private var prioritizedSorter: (Product, Product) -> Bool { Product.priorityComparator }
 
     public init() {}
 
@@ -162,9 +155,13 @@ public struct Products: View {
             .navigationBarTitleDisplayMode(.inline)
             .background(Color(.systemGroupedBackground))
             .task {
+                guard !hasLoadedInitially else { return }
+
                 await loadProducts()
                 await notificationsManager.loadNotifications()
                 await homeViewModel.loadInitialDataIfNeeded()
+
+                hasLoadedInitially = true
             }
             .refreshable {
                 await loadProducts(force: true)
@@ -488,11 +485,14 @@ public struct Products: View {
             let fetched = try await ProductService.shared.fetchProducts(query: query)
             let sanitizedBatch = [Product]().mergingUnique(with: fetched)
 
+            let merged: [Product]
             if pageToLoad == 1 {
-                products = sanitizedBatch
+                merged = sanitizedBatch
             } else {
-                products = products.mergingUnique(with: sanitizedBatch)
+                merged = products.mergingUnique(with: sanitizedBatch)
             }
+
+            products = merged.sorted(by: prioritizedSorter)
 
             favoritesManager.sync(with: products)
 

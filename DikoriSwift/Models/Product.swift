@@ -80,7 +80,7 @@ struct Product: Identifiable, Codable, Hashable {
         case unknown
 
         var sortOrder: Int {
-            switch self {
+            switch normalized {
             case .a: return 0
             case .b: return 1
             case .c: return 2
@@ -92,6 +92,17 @@ struct Product: Identifiable, Codable, Hashable {
             let container = try decoder.singleValueContainer()
             let raw = (try? container.decode(String.self)) ?? ""
             self = Priority(rawValue: raw.uppercased()) ?? .unknown
+        }
+
+        /// Treats missing or unknown priorities as "C" so they sort consistently with
+        /// the lowest known tier instead of drifting to the end.
+        var normalized: Priority {
+            switch self {
+            case .unknown:
+                return .c
+            default:
+                return self
+            }
         }
 
         func encode(to encoder: Encoder) throws {
@@ -222,5 +233,40 @@ struct Product: Identifiable, Codable, Hashable {
         try container.encode(priority, forKey: .priority)
         try container.encodeIfPresent(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+    }
+}
+
+extension Product {
+    /// Shared priority-first sorter used across the app to keep A items before B, then C.
+    static let priorityComparator: (Product, Product) -> Bool = { lhs, rhs in
+        if lhs.priority.sortOrder != rhs.priority.sortOrder {
+            return lhs.priority.sortOrder < rhs.priority.sortOrder
+        }
+
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+    }
+
+    func applyingImageFallback(from variants: [ProductVariant]) -> Product {
+        guard images.isEmpty else { return self }
+
+        let variantImages = variants
+            .flatMap { $0.color.images }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        guard !variantImages.isEmpty else { return self }
+
+        return Product(
+            id: id,
+            name: name,
+            description: description,
+            category: category,
+            mainCategory: mainCategory,
+            subCategory: subCategory,
+            images: variantImages,
+            ownershipType: ownershipType,
+            priority: priority,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
     }
 }

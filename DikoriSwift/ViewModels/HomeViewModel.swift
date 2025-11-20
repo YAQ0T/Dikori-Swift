@@ -50,8 +50,8 @@ final class HomeViewModel: ObservableObject {
 
         do {
             let response = try await HomeCollectionsService.shared.fetchCollections()
-            recommended = response.recommended
-            newArrivals = response.newArrivals
+            recommended = response.recommended.sorted(by: Product.priorityComparator)
+            newArrivals = response.newArrivals.sorted(by: Product.priorityComparator)
             hasLoadedCollections = true
         } catch {
             collectionsError = error.localizedDescription
