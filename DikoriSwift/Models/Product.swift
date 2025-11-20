@@ -224,3 +224,29 @@ struct Product: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }
 }
+
+extension Product {
+    func applyingImageFallback(from variants: [ProductVariant]) -> Product {
+        guard images.isEmpty else { return self }
+
+        let variantImages = variants
+            .flatMap { $0.color.images }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        guard !variantImages.isEmpty else { return self }
+
+        return Product(
+            id: id,
+            name: name,
+            description: description,
+            category: category,
+            mainCategory: mainCategory,
+            subCategory: subCategory,
+            images: variantImages,
+            ownershipType: ownershipType,
+            priority: priority,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}
