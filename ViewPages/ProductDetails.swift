@@ -630,9 +630,12 @@ struct ProductDetails: View {
         do {
             let response = try await ProductService.shared.fetchProduct(id: productID, withVariants: includeVariants)
             await MainActor.run {
-                product = response.product
                 if includeVariants {
+                    let enrichedProduct = response.product.applyingImageFallback(from: response.variants)
+                    product = enrichedProduct
                     variants = response.variants
+                } else {
+                    product = response.product
                 }
                 isFetchingDetails = false
                 ensureDefaultSelections()

@@ -211,6 +211,7 @@ struct CategoryProductsView: View {
     @State private var hasMore: Bool = true
     @State private var activeSearchQuery: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var hasLoadedInitially: Bool = false
 
     private let pageSize: Int = 100
     private let columns = [
@@ -258,7 +259,17 @@ struct CategoryProductsView: View {
             base = base.filter { favoritesManager.allFavoriteIDs.contains($0.id) }
         }
 
-        return base
+        return base.sorted(by: prioritizedSorter)
+    }
+
+    private var prioritizedSorter: (Product, Product) -> Bool {
+        { lhs, rhs in
+            if lhs.priority.sortOrder != rhs.priority.sortOrder {
+                return lhs.priority.sortOrder < rhs.priority.sortOrder
+            }
+
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
     var body: some View {
@@ -312,8 +323,12 @@ struct CategoryProductsView: View {
         .navigationTitle(subCategory)
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            guard !hasLoadedInitially else { return }
+
             await loadProducts(force: true)
             await notificationsManager.loadNotifications()
+
+            hasLoadedInitially = true
         }
         .refreshable {
             await loadProducts(force: true)

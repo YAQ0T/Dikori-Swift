@@ -28,6 +28,7 @@ public struct Products: View {
     @State private var hasMore: Bool = true
     @State private var activeSearchQuery: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var hasLoadedInitially: Bool = false
 
     private let pageSize: Int = 100
 
@@ -162,9 +163,13 @@ public struct Products: View {
             .navigationBarTitleDisplayMode(.inline)
             .background(Color(.systemGroupedBackground))
             .task {
+                guard !hasLoadedInitially else { return }
+
                 await loadProducts()
                 await notificationsManager.loadNotifications()
                 await homeViewModel.loadInitialDataIfNeeded()
+
+                hasLoadedInitially = true
             }
             .refreshable {
                 await loadProducts(force: true)
