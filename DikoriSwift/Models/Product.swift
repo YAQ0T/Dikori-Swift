@@ -80,7 +80,7 @@ struct Product: Identifiable, Codable, Hashable {
         case unknown
 
         var sortOrder: Int {
-            switch self {
+            switch normalized {
             case .a: return 0
             case .b: return 1
             case .c: return 2
@@ -92,6 +92,17 @@ struct Product: Identifiable, Codable, Hashable {
             let container = try decoder.singleValueContainer()
             let raw = (try? container.decode(String.self)) ?? ""
             self = Priority(rawValue: raw.uppercased()) ?? .unknown
+        }
+
+        /// Treats missing or unknown priorities as "C" so they sort consistently with
+        /// the lowest known tier instead of drifting to the end.
+        var normalized: Priority {
+            switch self {
+            case .unknown:
+                return .c
+            default:
+                return self
+            }
         }
 
         func encode(to encoder: Encoder) throws {
