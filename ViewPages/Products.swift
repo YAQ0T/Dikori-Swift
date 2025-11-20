@@ -542,7 +542,7 @@ public struct Products: View {
 
             if homeViewModel.isLoadingCategories && homeViewModel.categories.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
                         ForEach(0..<4, id: \.self) { _ in
                             CategoryCardPlaceholder()
                         }
@@ -568,7 +568,7 @@ public struct Products: View {
                     .foregroundStyle(.secondary)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
                         ForEach(homeViewModel.categories) { category in
                             NavigationLink {
                                 SubcategoryListView(category: category)
@@ -683,7 +683,7 @@ private struct CategoryCard: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }
-        .frame(width: 88)
+        .frame(width: 88, height: 128, alignment: .top)
         .padding(.vertical, 12)
     }
 }
@@ -698,7 +698,7 @@ private struct CategoryCardPlaceholder: View {
                 .fill(Color(.systemGray5))
                 .frame(width: 56, height: 10)
         }
-        .frame(width: 88)
+        .frame(width: 88, height: 128, alignment: .top)
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
