@@ -119,7 +119,7 @@ struct CategoryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "square.grid.2x2")
+            Image(systemName: category.iconName)
                 .font(.title3)
                 .foregroundStyle(Color.accentColor)
             VStack(alignment: .leading, spacing: 4) {
