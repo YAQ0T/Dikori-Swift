@@ -262,6 +262,16 @@ struct CategoryProductsView: View {
         return base.sorted(by: prioritizedSorter)
     }
 
+    private var prioritizedSorter: (Product, Product) -> Bool {
+        { lhs, rhs in
+            if lhs.priority.sortOrder != rhs.priority.sortOrder {
+                return lhs.priority.sortOrder < rhs.priority.sortOrder
+            }
+
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
+    }
+
     private var prioritizedSorter: (Product, Product) -> Bool { Product.priorityComparator }
 
     var body: some View {

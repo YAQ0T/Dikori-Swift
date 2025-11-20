@@ -237,15 +237,6 @@ struct Product: Identifiable, Codable, Hashable {
 }
 
 extension Product {
-    /// Shared priority-first sorter used across the app to keep A items before B, then C.
-    static let priorityComparator: (Product, Product) -> Bool = { lhs, rhs in
-        if lhs.priority.sortOrder != rhs.priority.sortOrder {
-            return lhs.priority.sortOrder < rhs.priority.sortOrder
-        }
-
-        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
-    }
-
     func applyingImageFallback(from variants: [ProductVariant]) -> Product {
         guard images.isEmpty else { return self }
 
