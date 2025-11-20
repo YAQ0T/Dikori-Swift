@@ -272,6 +272,8 @@ struct CategoryProductsView: View {
         }
     }
 
+    private var prioritizedSorter: (Product, Product) -> Bool { Product.priorityComparator }
+
     var body: some View {
         VStack(spacing: 0) {
             header
