@@ -88,7 +88,17 @@ public struct Products: View {
             base = base.filter { favoritesManager.allFavoriteIDs.contains($0.id) }
         }
 
-        return base
+        return base.sorted(by: prioritizedSorter)
+    }
+
+    private var prioritizedSorter: (Product, Product) -> Bool {
+        { lhs, rhs in
+            if lhs.priority.sortOrder != rhs.priority.sortOrder {
+                return lhs.priority.sortOrder < rhs.priority.sortOrder
+            }
+
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
     public init() {}
@@ -110,6 +120,10 @@ public struct Products: View {
                             if shouldShowHomeHighlights {
                                 homeHighlights
                             }
+
+                            Text("جميع المنتجات")
+                                .font(.title3.weight(.semibold))
+                                .frame(maxWidth: .infinity, alignment: .leading)
 
                             LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
                                 ForEach(filteredProducts) { product in
