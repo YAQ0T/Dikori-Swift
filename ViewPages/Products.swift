@@ -684,12 +684,7 @@ private struct CategoryCard: View {
                 .lineLimit(2)
         }
         .frame(width: 88)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 3)
-        )
+        .padding(.vertical, 12)
     }
 }
 
@@ -713,8 +708,27 @@ private struct CategoryCardPlaceholder: View {
     }
 }
 
-private extension CategoriesViewModel.CategorySummary {
+extension CategoriesViewModel.CategorySummary {
     var iconName: String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let customIcons: [String: String] = [
+            "اكسسوارات غرف نوم": "bed.double.fill",
+            "كبسات مسامير و براغي": "wrench.fill",
+            "اكسسوارات مطابخ": "fork.knife",
+            "لوازم المنيوم": "shippingbox.fill",
+            "جوارير وسكك ومفصلات": "slider.horizontal.3",
+            "مقابض خزائن": "key.fill",
+            "لوازم منجدين": "scissors",
+            "عدة وأدوات": "hammer.fill",
+            "مقابض أبواب": "lock.open.fill",
+            "لوازم نجارين": "ruler"
+        ]
+
+        if let exactMatch = customIcons[trimmedName] {
+            return exactMatch
+        }
+
         let normalized = name.replacingOccurrences(of: " ", with: "")
             .applyingTransform(.toLatin, reverse: false)?
             .lowercased() ?? name.lowercased()
