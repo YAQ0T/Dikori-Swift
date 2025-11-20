@@ -493,11 +493,14 @@ public struct Products: View {
             let fetched = try await ProductService.shared.fetchProducts(query: query)
             let sanitizedBatch = [Product]().mergingUnique(with: fetched)
 
+            let merged: [Product]
             if pageToLoad == 1 {
-                products = sanitizedBatch
+                merged = sanitizedBatch
             } else {
-                products = products.mergingUnique(with: sanitizedBatch)
+                merged = products.mergingUnique(with: sanitizedBatch)
             }
+
+            products = merged.sorted(by: prioritizedSorter)
 
             favoritesManager.sync(with: products)
 
