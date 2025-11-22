@@ -17,8 +17,7 @@ const {
 function priorityRankValue(priority) {
   if (priority === "A") return 1;
   if (priority === "B") return 2;
-  if (priority === "C") return 3;
-  return 4;
+  return 3; // عالج الحالات المفقودة كأنها أولوية C
 }
 
 /** تحويل ترتيب الأولويات إلى رقم للفرز */
@@ -29,7 +28,7 @@ const priorityRankExpr = {
       { case: { $eq: ["$priority", "B"] }, then: 2 },
       { case: { $eq: ["$priority", "C"] }, then: 3 },
     ],
-    default: 4,
+    default: 3,
   },
 };
 

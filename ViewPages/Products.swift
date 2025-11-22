@@ -24,7 +24,7 @@ public struct Products: View {
     @State private var isLoading: Bool = false
     @State private var isLoadingMore: Bool = false
     @State private var errorMessage: String?
-    @State private var nextPage: Int = 1
+    @State private var currentPage: Int = 1
     @State private var hasMore: Bool = true
     @State private var activeSearchQuery: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
@@ -126,7 +126,7 @@ public struct Products: View {
     public init(
         showsHomeHighlights: Bool = true,
         showsCatalogGrid: Bool = true,
-        pageSize: Int = 100
+        pageSize: Int = 20
     ) {
         self.showsHomeHighlights = showsHomeHighlights
         self.showsCatalogGrid = showsCatalogGrid
@@ -171,9 +171,6 @@ public struct Products: View {
                                             }
                                         }
                                         .buttonStyle(.plain)
-                                        .task {
-                                            await loadMoreIfNeeded(current: product)
-                                        }
                                     }
                                 }
 
@@ -182,6 +179,8 @@ public struct Products: View {
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 16)
                                 }
+
+                                paginationControls
                             }
                         }
                         .padding(.horizontal, 20)
@@ -414,6 +413,38 @@ public struct Products: View {
         )
     }
 
+    private var paginationControls: some View {
+        HStack(spacing: 12) {
+            Button {
+                Task { await loadProducts(page: max(currentPage - 1, 1)) }
+            } label: {
+                Label("السابق", systemImage: "chevron.backward")
+                    .labelStyle(.titleAndIcon)
+                    .font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(currentPage == 1 || isLoading || isLoadingMore)
+
+            Text("صفحة \(currentPage)")
+                .font(.footnote.weight(.semibold))
+                .frame(minWidth: 80)
+
+            Button {
+                Task { await loadProducts(page: currentPage + 1) }
+            } label: {
+                Label("التالي", systemImage: "chevron.forward")
+                    .labelStyle(.titleAndIcon)
+                    .font(.footnote.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(!hasMore || isLoading || isLoadingMore)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
@@ -479,28 +510,30 @@ public struct Products: View {
     }
 
     @MainActor
-    private func loadProducts(force: Bool = false) async {
+    private func loadProducts(force: Bool = false, page: Int? = nil) async {
         guard showsCatalogGrid else { return }
 
         let trimmedQuery = trimmedSearchText
         let previousQuery = activeSearchQuery
 
+        var targetPage = page ?? currentPage
+
         if force {
-            nextPage = 1
+            targetPage = 1
+            currentPage = 1
             hasMore = true
             if trimmedQuery != previousQuery {
                 products = []
             }
             activeSearchQuery = trimmedQuery
-        } else if nextPage == 1 && products.isEmpty {
+        } else if products.isEmpty {
             activeSearchQuery = trimmedQuery
         }
 
-        guard hasMore || nextPage == 1 else { return }
+        guard targetPage >= 1 else { return }
         if isLoading || isLoadingMore { return }
 
-        let pageToLoad = nextPage
-        let shouldShowInitial = pageToLoad == 1 && products.isEmpty
+        let shouldShowInitial = products.isEmpty
 
         if shouldShowInitial {
             isLoading = true
@@ -520,7 +553,7 @@ public struct Products: View {
 
         do {
             let query = ProductQuery(
-                page: pageToLoad,
+                page: targetPage,
                 limit: pageSize,
                 search: activeSearchQuery.isEmpty ? nil : activeSearchQuery
             )
@@ -528,45 +561,16 @@ public struct Products: View {
             let sanitizedBatch = [Product]().mergingUnique(with: fetched)
             let sortedBatch = sanitizedBatch.sorted(by: prioritizedSorter)
 
-            if pageToLoad == 1 {
-                products = sortedBatch
-            } else {
-                products = products
-                    .mergingUnique(with: sortedBatch)
-                    .sorted(by: prioritizedSorter)
-            }
+            products = sortedBatch
+            currentPage = targetPage
 
             favoritesManager.sync(with: products)
 
-            if fetched.count < pageSize {
-                hasMore = false
-            } else {
-                nextPage = pageToLoad + 1
-            }
+            hasMore = fetched.count == pageSize
         } catch {
-            if pageToLoad == 1 {
+            if targetPage == 1 {
                 errorMessage = error.localizedDescription
             }
-        }
-    }
-
-    @MainActor
-    private func loadMoreIfNeeded(current product: Product) async {
-        guard showsCatalogGrid else { return }
-        guard hasMore else { return }
-        guard !isLoading && !isLoadingMore else { return }
-
-        let filtered = filteredProducts
-        guard let index = filtered.firstIndex(of: product) else { return }
-
-        let thresholdIndex = filtered.index(
-            filtered.endIndex,
-            offsetBy: -6,
-            limitedBy: filtered.startIndex
-        ) ?? filtered.startIndex
-
-        if index >= thresholdIndex {
-            await loadProducts()
         }
     }
 
