@@ -9,22 +9,38 @@ import SwiftUI
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case shop, categories, account
+        case home, allProducts, categories, account
     }
 
     @EnvironmentObject private var appearanceManager: AppearanceManager
-    @State private var selection: Tab = .shop
+    @State private var selection: Tab = .home
 
     var body: some View {
         TabView(selection: $selection) {
-            Products()
+            Products(
+                showsHomeHighlights: true,
+                showsCatalogGrid: false
+            )
                 .tabItem {
-                    Label("المتجر",
-                          systemImage: selection == .shop
+                    Label("الرئيسية",
+                          systemImage: selection == .home
                           ? "bag.fill"
                           : "bag")
                 }
-                .tag(Tab.shop)
+                .tag(Tab.home)
+
+            Products(
+                showsHomeHighlights: false,
+                showsCatalogGrid: true,
+                pageSize: 20
+            )
+                .tabItem {
+                    Label("جميع المنتجات",
+                          systemImage: selection == .allProducts
+                          ? "bag.fill"
+                          : "bag")
+                }
+                .tag(Tab.allProducts)
 
             CategoriesView()
                 .tabItem {

@@ -29,14 +29,16 @@ public struct Products: View {
     @State private var activeSearchQuery: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
 
-    private let pageSize: Int = 100
+    private let showsHomeHighlights: Bool
+    private let showsCatalogGrid: Bool
+    private let pageSize: Int
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var shouldShowHomeHighlights: Bool {
-        trimmedSearchText.isEmpty && !showOnlyFavorites
+        showsHomeHighlights && trimmedSearchText.isEmpty && !showOnlyFavorites
     }
 
     // أعمدة الشبكة (عمودان)
@@ -63,6 +65,26 @@ public struct Products: View {
 
     private var unreadNotificationsCount: Int {
         notificationsManager.notifications.filter { !$0.isRead }.count
+    }
+
+    private var favoritesBadge: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: showOnlyFavorites ? "heart.circle.fill" : "heart")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+
+            if favoritesCount > 0 {
+                Text("\(favoritesCount)")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule().fill(Color.pink.opacity(0.9))
+                    )
+                    .foregroundStyle(Color.white)
+                    .offset(x: 10, y: -8)
+            }
+        }
     }
 
     // تصفية حسب البحث + المفضلة
@@ -101,18 +123,26 @@ public struct Products: View {
         }
     }
 
-    public init() {}
+    public init(
+        showsHomeHighlights: Bool = true,
+        showsCatalogGrid: Bool = true,
+        pageSize: Int = 100
+    ) {
+        self.showsHomeHighlights = showsHomeHighlights
+        self.showsCatalogGrid = showsCatalogGrid
+        self.pageSize = pageSize
+    }
 
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
 
-                if isLoading && products.isEmpty {
+                if showsCatalogGrid && isLoading && products.isEmpty {
                     loadingState
-                } else if let errorMessage, products.isEmpty {
+                } else if showsCatalogGrid, let errorMessage, products.isEmpty {
                     errorState(message: errorMessage)
-                } else if filteredProducts.isEmpty {
+                } else if showsCatalogGrid, filteredProducts.isEmpty {
                     emptyState
                 } else {
                     ScrollView {
@@ -121,35 +151,37 @@ public struct Products: View {
                                 homeHighlights
                             }
 
-                            Text("جميع المنتجات")
-                                .font(.title3.weight(.semibold))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if showsCatalogGrid {
+                                Text("جميع المنتجات")
+                                    .font(.title3.weight(.semibold))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                            LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
-                                ForEach(filteredProducts) { product in
-                                    NavigationLink {
-                                        ProductDetails(product: product)
-                                    } label: {
-                                        ProductCard(
-                                            imageURL: product.primaryImageURL,
-                                            title: product.displayName,
-                                            subtitle: product.secondaryText,
-                                            isFavorite: favoritesManager.isFavorite(product)
-                                        ) {
-                                            toggleFavorite(for: product)
+                                LazyVGrid(columns: columns, alignment: .center, spacing: 20) {
+                                    ForEach(filteredProducts) { product in
+                                        NavigationLink {
+                                            ProductDetails(product: product)
+                                        } label: {
+                                            ProductCard(
+                                                imageURL: product.primaryImageURL,
+                                                title: product.displayName,
+                                                subtitle: product.secondaryText,
+                                                isFavorite: favoritesManager.isFavorite(product)
+                                            ) {
+                                                toggleFavorite(for: product)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .task {
+                                            await loadMoreIfNeeded(current: product)
                                         }
                                     }
-                                    .buttonStyle(.plain)
-                                    .task {
-                                        await loadMoreIfNeeded(current: product)
-                                    }
                                 }
-                            }
 
-                            if isLoadingMore {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
+                                if isLoadingMore {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 16)
+                                }
                             }
                         }
                         .padding(.horizontal, 20)
@@ -162,13 +194,21 @@ public struct Products: View {
             .navigationBarTitleDisplayMode(.inline)
             .background(Color(.systemGroupedBackground))
             .task {
-                await loadProducts()
+                if showsCatalogGrid {
+                    await loadProducts()
+                }
                 await notificationsManager.loadNotifications()
-                await homeViewModel.loadInitialDataIfNeeded()
+                if showsHomeHighlights {
+                    await homeViewModel.loadInitialDataIfNeeded()
+                }
             }
             .refreshable {
-                await loadProducts(force: true)
-                await homeViewModel.refreshHighlights()
+                if showsCatalogGrid {
+                    await loadProducts(force: true)
+                }
+                if showsHomeHighlights {
+                    await homeViewModel.refreshHighlights()
+                }
             }
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {
@@ -216,6 +256,7 @@ public struct Products: View {
                 }
             }
             .onChange(of: searchText) { _, newValue in
+                guard showsCatalogGrid else { return }
                 searchDebounceTask?.cancel()
                 searchDebounceTask = nil
 
@@ -254,65 +295,61 @@ public struct Products: View {
             HStack(spacing: 12) {
                 cartButton
 
-                // شريط البحث بكبسولة
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").opacity(0.6)
-                    TextField("ابحث عن منتج...", text: $searchText)
-                        .focused($isSearching)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .submitLabel(.search)
-                        .onSubmit {
-                            searchDebounceTask?.cancel()
-                            searchDebounceTask = nil
-                            searchDebounceTask = Task {
-                                await loadProducts(force: true)
+                if showsCatalogGrid {
+                    // شريط البحث بكبسولة
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass").opacity(0.6)
+                        TextField("ابحث عن منتج...", text: $searchText)
+                            .focused($isSearching)
+                            .textInputAutocapitalization(.never)
+                            .disableAutocorrection(true)
+                            .submitLabel(.search)
+                            .onSubmit {
+                                searchDebounceTask?.cancel()
+                                searchDebounceTask = nil
+                                searchDebounceTask = Task {
+                                    await loadProducts(force: true)
+                                }
                             }
-                        }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .frame(maxWidth: .infinity)
-
-                Menu {
-                    Button {
-                        showOnlyFavorites.toggle()
-                    } label: {
-                        Label(
-                            showOnlyFavorites ? "عرض كل المنتجات" : "عرض المفضلة فقط",
-                            systemImage: showOnlyFavorites ? "rectangle.stack" : "heart.text.square"
-                        )
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .frame(maxWidth: .infinity)
 
-                    if favoritesCount > 0 {
+                    Menu {
                         Button {
-                            activeSheet = .favorites
+                            showOnlyFavorites.toggle()
                         } label: {
-                            Label("إدارة المفضلة (\(favoritesCount))", systemImage: "heart.circle")
+                            Label(
+                                showOnlyFavorites ? "عرض كل المنتجات" : "عرض المفضلة فقط",
+                                systemImage: showOnlyFavorites ? "rectangle.stack" : "heart.text.square"
+                            )
                         }
-                    }
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: showOnlyFavorites ? "heart.circle.fill" : "heart")
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
 
                         if favoritesCount > 0 {
-                            Text("\(favoritesCount)")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule().fill(Color.pink.opacity(0.9))
-                                )
-                                .foregroundStyle(Color.white)
-                                .offset(x: 10, y: -8)
+                            Button {
+                                activeSheet = .favorites
+                            } label: {
+                                Label("إدارة المفضلة (\(favoritesCount))", systemImage: "heart.circle")
+                            }
                         }
+                    } label: {
+                        favoritesBadge
                     }
+                    .accessibilityLabel(Text("خيارات المفضلة"))
+                } else {
+                    Spacer()
+
+                    Button {
+                        activeSheet = .favorites
+                    } label: {
+                        favoritesBadge
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("المفضلة"))
                 }
-                .accessibilityLabel(Text("خيارات المفضلة"))
 
                 Button {
                     activeSheet = .notifications
@@ -443,6 +480,8 @@ public struct Products: View {
 
     @MainActor
     private func loadProducts(force: Bool = false) async {
+        guard showsCatalogGrid else { return }
+
         let trimmedQuery = trimmedSearchText
         let previousQuery = activeSearchQuery
 
@@ -487,11 +526,14 @@ public struct Products: View {
             )
             let fetched = try await ProductService.shared.fetchProducts(query: query)
             let sanitizedBatch = [Product]().mergingUnique(with: fetched)
+            let sortedBatch = sanitizedBatch.sorted(by: prioritizedSorter)
 
             if pageToLoad == 1 {
-                products = sanitizedBatch
+                products = sortedBatch
             } else {
-                products = products.mergingUnique(with: sanitizedBatch)
+                products = products
+                    .mergingUnique(with: sortedBatch)
+                    .sorted(by: prioritizedSorter)
             }
 
             favoritesManager.sync(with: products)
@@ -510,6 +552,7 @@ public struct Products: View {
 
     @MainActor
     private func loadMoreIfNeeded(current product: Product) async {
+        guard showsCatalogGrid else { return }
         guard hasMore else { return }
         guard !isLoading && !isLoadingMore else { return }
 
