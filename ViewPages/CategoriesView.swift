@@ -258,7 +258,17 @@ struct CategoryProductsView: View {
             base = base.filter { favoritesManager.allFavoriteIDs.contains($0.id) }
         }
 
-        return base
+        return base.sorted(by: prioritizedSorter)
+    }
+
+    private var prioritizedSorter: (Product, Product) -> Bool {
+        { lhs, rhs in
+            if lhs.priority.sortOrder != rhs.priority.sortOrder {
+                return lhs.priority.sortOrder < rhs.priority.sortOrder
+            }
+
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
     var body: some View {
