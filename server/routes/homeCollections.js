@@ -10,6 +10,13 @@ const {
   isAdmin /* أو isAdmin فقط */,
 } = require("../middleware/authMiddleware");
 
+const priorityRankValue = (priority) => {
+  if (priority === "A") return 1;
+  if (priority === "B") return 2;
+  if (priority === "C") return 3;
+  return 4;
+};
+
 // ====== Admin/Dealer: حفظ القوائم ======
 router.put("/", verifyToken, isAdmin, async (req, res) => {
   try {
@@ -78,7 +85,11 @@ router.get("/", async (_req, res) => {
       .populate("recommended")
       .populate("newArrivals")
       .lean();
-    return res.json(doc || { recommended: [], newArrivals: [] });
+    const normalizeList = (list = []) =>
+      [...list].sort((a, b) => priorityRankValue(a.priority) - priorityRankValue(b.priority));
+    const recommended = normalizeList(doc?.recommended || []);
+    const newArrivals = normalizeList(doc?.newArrivals || []);
+    return res.json({ recommended, newArrivals });
   } catch (err) {
     console.error("GET /api/home-collections error:", err);
     return res.status(500).json({ message: "خطأ في الخادم" });
@@ -96,7 +107,10 @@ router.get("/recommended", async (_req, res) => {
     const list = Array.isArray(populated?.recommended)
       ? populated.recommended
       : [];
-    return res.json(list);
+    const sorted = [...list].sort(
+      (a, b) => priorityRankValue(a.priority) - priorityRankValue(b.priority)
+    );
+    return res.json(sorted);
   } catch (err) {
     console.error("GET /api/home-collections/recommended error:", err);
     return res.status(500).json({ message: "خطأ في الخادم" });
@@ -114,7 +128,10 @@ router.get("/new", async (_req, res) => {
     const list = Array.isArray(populated?.newArrivals)
       ? populated.newArrivals
       : [];
-    return res.json(list);
+    const sorted = [...list].sort(
+      (a, b) => priorityRankValue(a.priority) - priorityRankValue(b.priority)
+    );
+    return res.json(sorted);
   } catch (err) {
     console.error("GET /api/home-collections/new error:", err);
     return res.status(500).json({ message: "خطأ في الخادم" });
