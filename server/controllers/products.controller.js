@@ -13,6 +13,14 @@ const {
   mapLocalizedForResponse,
 } = require("../utils/localized");
 
+/** ترتيب رقمي للأولوية داخل Node */
+function priorityRankValue(priority) {
+  if (priority === "A") return 1;
+  if (priority === "B") return 2;
+  if (priority === "C") return 3;
+  return 4;
+}
+
 /** تحويل ترتيب الأولويات إلى رقم للفرز */
 const priorityRankExpr = {
   $switch: {
@@ -516,11 +524,13 @@ const ProductsController = {
         limit: req.query.limit || 50,
       });
 
-      const products = await Product.find(filter)
-        .sort({ priority: 1, createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean();
+      const products = await Product.aggregate([
+        { $match: filter },
+        { $addFields: { priorityRank: priorityRankExpr } },
+        { $sort: { priorityRank: 1, createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limitNum },
+      ]);
 
       return res.status(200).json(formatProducts(products));
     } catch (err) {
