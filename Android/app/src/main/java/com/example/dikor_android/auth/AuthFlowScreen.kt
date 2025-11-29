@@ -31,6 +31,8 @@ import com.example.dikor_android.products.managers.CartManager
 import com.example.dikor_android.products.managers.FavoritesManager
 import com.example.dikor_android.products.managers.NotificationsManager
 import com.example.dikor_android.products.ui.ShoppingRoot
+import com.example.dikor_android.ui.theme.ThemePreference
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
 
 @Composable
 fun AuthFlowScreen(
@@ -39,7 +41,10 @@ fun AuthFlowScreen(
     notificationsManager: NotificationsManager,
     cartManager: CartManager,
     productService: ProductService,
-    homeCollectionsService: HomeCollectionsService
+    homeCollectionsService: HomeCollectionsService,
+    themePreference: ThemePreference,
+    onThemePreferenceChange: (ThemePreference) -> Unit,
+    windowSizeClass: WindowSizeClass
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val authState = uiState.authState
@@ -219,14 +224,17 @@ private fun AuthenticatedState(
     val session = (uiState.authState as AuthState.Authenticated).session
     ShoppingRoot(
         session = session,
-        favoritesManager = favoritesManager,
-        notificationsManager = notificationsManager,
-        cartManager = cartManager,
-        productService = productService,
-        homeCollectionsService = homeCollectionsService,
-        isRefreshing = uiState.isWorking,
-        serviceStatus = uiState.serviceStatus,
-        onRefreshServices = viewModel::refreshSessionClients,
-        onLogout = viewModel::logout
-    )
+                    favoritesManager = favoritesManager,
+                    notificationsManager = notificationsManager,
+                    cartManager = cartManager,
+                    productService = productService,
+                    homeCollectionsService = homeCollectionsService,
+                    themePreference = themePreference,
+                    onThemePreferenceChange = onThemePreferenceChange,
+                    windowSizeClass = windowSizeClass,
+                    isRefreshing = uiState.isWorking,
+                    serviceStatus = uiState.serviceStatus,
+                    onRefreshServices = viewModel::refreshSessionClients,
+                    onLogout = viewModel::logout
+                )
 }
