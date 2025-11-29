@@ -9,31 +9,47 @@ import SwiftUI
 
 struct MainTabView: View {
     enum Tab: Hashable {
-        case shop, favorites, account
+        case home, allProducts, categories, account
     }
 
     @EnvironmentObject private var appearanceManager: AppearanceManager
-    @State private var selection: Tab = .shop
+    @State private var selection: Tab = .home
 
     var body: some View {
         TabView(selection: $selection) {
-            Products()
+            Products(
+                showsHomeHighlights: true,
+                showsCatalogGrid: false
+            )
                 .tabItem {
-                    Label("المتجر",
-                          systemImage: selection == .shop
+                    Label("الرئيسية",
+                          systemImage: selection == .home
                           ? "bag.fill"
                           : "bag")
                 }
-                .tag(Tab.shop)
+                .tag(Tab.home)
 
-            FavoritesView()
+            Products(
+                showsHomeHighlights: false,
+                showsCatalogGrid: true,
+                pageSize: 20
+            )
                 .tabItem {
-                    Label("المفضلة",
-                          systemImage: selection == .favorites
-                          ? "heart.fill"
-                          : "heart")
+                    Label("جميع المنتجات",
+                          systemImage: selection == .allProducts
+                          ? "bag.fill"
+                          : "bag")
                 }
-                .tag(Tab.favorites)
+                .tag(Tab.allProducts)
+
+            CategoriesView()
+                .tabItem {
+                    Label("التصنيفات",
+                          systemImage: selection == .categories
+                          ? "square.grid.2x2.fill"
+                          : "square.grid.2x2")
+                }
+                .tag(Tab.categories)
 
             AccountView()
                 .tabItem {
@@ -58,6 +74,7 @@ struct MainTabView: View {
         .environmentObject(NotificationsManager.preview())
         .environmentObject(OrdersManager.preview())
         .environmentObject(AppearanceManager.preview)
+        .environmentObject(CartManager.preview())
 }
 
 private extension View {

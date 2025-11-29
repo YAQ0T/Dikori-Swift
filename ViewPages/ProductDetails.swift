@@ -14,18 +14,22 @@ struct ProductDetails: View {
     private let initialProduct: Product?
 
     @EnvironmentObject private var favoritesManager: FavoritesManager
+    @EnvironmentObject private var cartManager: CartManager
     @State private var product: Product?
     @State private var variants: [ProductVariant] = []
     @State private var isFetchingDetails = false
     @State private var loadError: String?
 
     @State private var quantity: Int = 1
+    @State private var pendingQuantity: Int = 1
+    @State private var pendingQuantityText: String = "1"
     @State private var isFav: Bool = false
     @State private var selectedColor: String?
     @State private var selectedMeasure: String?
+    @State private var selectedImageIndex: Int = 0
     @State private var isAddingToCart = false
-
-    private let fallbackImageURL = URL(string: "https://i.imgur.com/KKPpSNy.png")!
+    @State private var isQuantitySheetPresented = false
+    @FocusState private var isQuantityFieldFocused: Bool
 
     init(product: Product, includeVariants: Bool = true) {
         self.productID = product.id
@@ -97,10 +101,30 @@ struct ProductDetails: View {
         selectedVariant?.price.effectiveAmount
     }
 
-    private var currentImageURL: URL? {
-        if let url = selectedVariant?.primaryImageURL { return url }
-        if let url = currentProduct?.primaryImageURL { return url }
-        return fallbackImageURL
+    private var variantImageURLs: [URL] {
+        selectedVariant?.color.images.compactMap { URL(string: $0) } ?? []
+    }
+
+    private var productImageURLs: [URL] {
+        guard let images = currentProduct?.images else { return [] }
+        return images.compactMap { URL(string: $0) }
+    }
+
+    private var galleryImageURLs: [URL] {
+        var combined: [URL] = []
+        let variantURLs = variantImageURLs
+        combined.append(contentsOf: variantURLs)
+
+        for url in productImageURLs where !combined.contains(url) {
+            combined.append(url)
+        }
+
+        return combined
+    }
+
+    private var safeSelectedImageIndex: Int {
+        guard !galleryImageURLs.isEmpty else { return 0 }
+        return galleryImageURLs.indices.contains(selectedImageIndex) ? selectedImageIndex : 0
     }
 
     private var isContentAvailable: Bool {
@@ -137,13 +161,14 @@ struct ProductDetails: View {
                     }
                     .padding(.top, 8)
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    bottomBar
+                }
 
                 if isFetchingDetails && !isContentAvailable {
                     ProgressView()
                         .scaleEffect(1.2)
                 }
-
-                bottomBar
             }
             .navigationTitle(productTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -153,6 +178,7 @@ struct ProductDetails: View {
                         Image(systemName: isFav ? "heart.fill" : "heart")
                             .font(.headline)
                             .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(isFav ? Color.red : Color.pink)
                     }
                 }
             }
@@ -177,73 +203,212 @@ struct ProductDetails: View {
             .onReceive(favoritesManager.$favorites) { _ in
                 updateFavoriteState()
             }
+            .onChange(of: selectedVariant?.id) { _, _ in
+                selectedImageIndex = 0
+            }
+            .onChange(of: galleryImageURLs) { _, newValue in
+                guard !newValue.isEmpty else {
+                    selectedImageIndex = 0
+                    return
+                }
+                if !newValue.indices.contains(selectedImageIndex) {
+                    selectedImageIndex = 0
+                }
+            }
+            .sheet(isPresented: $isQuantitySheetPresented) {
+                quantitySelectionSheet
+                    .presentationDetents([.height(260)])
+                    .presentationDragIndicator(.visible)
+            }
         }
     }
 
     // MARK: - Sections
 
+    private let heroImageHeight: CGFloat = 360
+
+    private var heroImageShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 28,
+            bottomLeadingRadius: 12,
+            bottomTrailingRadius: 12,
+            topTrailingRadius: 28
+        )
+    }
+
     private var heroImage: some View {
-        AsyncImage(url: currentImageURL) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 360)
-                    .clipped()
-                    .clipShape(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 28,
-                            bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
-                        )
-                    )
-                    .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
-                    .overlay(alignment: .bottomLeading) {
-                        LinearGradient(colors: [.clear, .black.opacity(0.2)],
-                                       startPoint: .top, endPoint: .bottom)
-                        .frame(height: 80)
-                        .clipShape(
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 0, bottomLeadingRadius: 12,
-                                bottomTrailingRadius: 12, topTrailingRadius: 0
-                            )
-                        )
-                    }
-                    .overlay(alignment: .topLeading) {
-                        if let currentPrice, currentPrice > 0 {
-                            PriceTag(text: formattedPrice(currentPrice))
-                                .padding(12)
-                        }
-                    }
-
-            case .empty:
+        VStack(spacing: 12) {
+            if galleryImageURLs.isEmpty {
                 heroPlaceholder
+            } else {
+                heroCarousel
+            }
 
-            case .failure:
-                heroPlaceholder
-
-            @unknown default:
-                heroPlaceholder
+            if galleryImageURLs.count > 1 {
+                thumbnailStrip
             }
         }
         .padding(.horizontal)
     }
 
+    private var heroCarousel: some View {
+        ZStack(alignment: .topLeading) {
+            Color(.systemBackground)
+            TabView(
+                selection: Binding(
+                    get: { safeSelectedImageIndex },
+                    set: { selectedImageIndex = $0 }
+                )
+            ) {
+                ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
+                    heroAsyncImage(url: url)
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(height: heroImageHeight)
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.2)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 80)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            if let currentPrice, currentPrice > 0 {
+                PriceTag(text: formattedPrice(currentPrice))
+                    .padding(12)
+            }
+        }
+        .clipShape(heroImageShape)
+        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+    }
+
+    @ViewBuilder
+    private func heroAsyncImage(url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                heroImageContent(for: image)
+            case .empty:
+                heroLoadingPlaceholder
+            case .failure:
+                heroImageErrorPlaceholder
+            @unknown default:
+                heroImageErrorPlaceholder
+            }
+        }
+    }
+
+    private func heroImageContent(for image: Image) -> some View {
+        image
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemBackground))
+    }
+
     private var heroPlaceholder: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 24)
+            heroImageShape
                 .fill(Color.secondary.opacity(0.08))
-                .frame(height: 360)
+                .frame(height: heroImageHeight)
             ProgressView()
         }
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 28
-            )
+        .frame(maxWidth: .infinity)
+        .clipShape(heroImageShape)
+        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 8)
+    }
+
+    private var heroLoadingPlaceholder: some View {
+        ZStack {
+            Color.secondary.opacity(0.08)
+            ProgressView()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var heroImageErrorPlaceholder: some View {
+        ZStack {
+            Color.secondary.opacity(0.08)
+            Image(systemName: "photo")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var thumbnailStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(Array(galleryImageURLs.enumerated()), id: \.offset) { index, url in
+                    Button {
+                        selectedImageIndex = index
+                    } label: {
+                        thumbnailContent(for: url, isSelected: index == safeSelectedImageIndex)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(thumbnailAccessibilityLabel(for: index))
+                    .accessibilityHint(index == safeSelectedImageIndex ? "الصورة الحالية" : "عرض هذه الصورة")
+                    .accessibilityAddTraits(
+                        index == safeSelectedImageIndex ? [.isButton, .isSelected] : .isButton
+                    )
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func thumbnailContent(for url: URL, isSelected: Bool) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            case .empty, .failure:
+                thumbnailPlaceholder
+            @unknown default:
+                thumbnailPlaceholder
+            }
+        }
+        .frame(width: 68, height: 68)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    isSelected ? Color.accentColor : Color.secondary.opacity(0.2),
+                    lineWidth: isSelected ? 2 : 1
+                )
         )
-        .padding(.horizontal)
+        .shadow(
+            color: isSelected ? Color.accentColor.opacity(0.25) : Color.black.opacity(0.05),
+            radius: isSelected ? 6 : 3,
+            x: 0,
+            y: isSelected ? 3 : 2
+        )
+        .contentShape(Rectangle())
+    }
+
+    private var thumbnailPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.secondary.opacity(0.08))
+            Image(systemName: "photo")
+                .imageScale(.medium)
+                .foregroundStyle(Color.secondary)
+        }
+    }
+
+    private func thumbnailAccessibilityLabel(for index: Int) -> String {
+        let total = galleryImageURLs.count
+        let base = "صورة المنتج رقم \(index + 1) من \(total)"
+        if index == safeSelectedImageIndex {
+            return base + ", الصورة الحالية"
+        }
+        return base
     }
 
     private var infoSection: some View {
@@ -362,8 +527,8 @@ struct ProductDetails: View {
     }
 
     private var bottomBar: some View {
-        VStack {
-            Spacer()
+        VStack(spacing: 0) {
+            Divider()
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("الإجمالي")
@@ -380,7 +545,11 @@ struct ProductDetails: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button {
-                    addToCart()
+                    guard !isAddingToCart else { return }
+                    let baseQuantity = max(1, quantity)
+                    pendingQuantity = baseQuantity
+                    pendingQuantityText = "\(baseQuantity)"
+                    isQuantitySheetPresented = true
                 } label: {
                     HStack {
                         if isAddingToCart {
@@ -399,15 +568,13 @@ struct ProductDetails: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-            .overlay(Divider(), alignment: .top)
         }
-        .ignoresSafeArea(edges: .bottom)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
     }
 
     private var totalPrice: Double? {
-        guard let unitPrice = currentPrice else { return nil }
-        return unitPrice * Double(quantity)
+        totalPrice(for: quantity)
     }
 
     private var loadingState: some View {
@@ -480,26 +647,30 @@ struct ProductDetails: View {
 
     // MARK: - Actions
 
-    private func addToCart() {
-        guard !isAddingToCart, let variant = selectedVariant else { return }
+    private func addToCart(quantity selectedQuantity: Int) {
+        guard !isAddingToCart, let product = currentProduct, let variant = selectedVariant else { return }
 
         isAddingToCart = true
 
-        let payload: [String: Any] = [
-            "productId": productID,
-            "variantId": variant.id,
-            "color": variant.colorName,
-            "measure": variant.displayMeasure,
-            "unitPrice": currentPrice ?? 0,
-            "quantity": quantity,
-            "total": (currentPrice ?? 0) * Double(quantity)
-        ]
+        let unitPrice = currentPrice ?? variant.price.effectiveAmount
+        cartManager.add(product: product, variant: variant, quantity: selectedQuantity, unitPrice: unitPrice ?? 0)
 
-        debugPrint("Add to cart payload:", payload)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            isAddingToCart = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.easeInOut) {
+                isAddingToCart = false
+            }
         }
+    }
+
+    private func finalizeAddToCart() {
+        guard !isAddingToCart else { return }
+        let enteredQuantity = Int(pendingQuantityText) ?? pendingQuantity
+        let selectedQuantity = max(1, enteredQuantity)
+        quantity = selectedQuantity
+        pendingQuantity = selectedQuantity
+        pendingQuantityText = "\(selectedQuantity)"
+        isQuantitySheetPresented = false
+        addToCart(quantity: selectedQuantity)
     }
 
     // MARK: - Helpers
@@ -510,6 +681,127 @@ struct ProductDetails: View {
         formatter.currencyCode = "ILS"
         formatter.locale = Locale(identifier: "ar")
         return formatter.string(from: amount as NSNumber) ?? "\(amount) ILS"
+    }
+
+    private var effectiveUnitPrice: Double? {
+        currentPrice ?? selectedVariant?.price.effectiveAmount
+    }
+
+    private func totalPrice(for quantity: Int) -> Double? {
+        guard let unitPrice = effectiveUnitPrice else { return nil }
+        return unitPrice * Double(quantity)
+    }
+
+    private var quantitySelectionSheet: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("اختر الكمية")
+                    .font(.headline)
+                if let product = currentProduct {
+                    Text(product.displayName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            HStack(spacing: 16) {
+                Button {
+                    let newValue = max(1, pendingQuantity - 1)
+                    pendingQuantity = newValue
+                    pendingQuantityText = "\(newValue)"
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 18, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                TextField("", text: Binding(
+                    get: { pendingQuantityText },
+                    set: { newValue in
+                        let filtered = newValue.filter { $0.isNumber }
+                        pendingQuantityText = filtered
+                        if let intValue = Int(filtered), intValue > 0 {
+                            pendingQuantity = intValue
+                        }
+                    }
+                ))
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .frame(minWidth: 60)
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .focused($isQuantityFieldFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    let committedValue = Int(pendingQuantityText) ?? pendingQuantity
+                    let sanitizedValue = max(1, committedValue)
+                    pendingQuantity = sanitizedValue
+                    pendingQuantityText = "\(sanitizedValue)"
+                }
+                .onChange(of: isQuantityFieldFocused) { _, isFocused in
+                    if !isFocused {
+                        let committedValue = Int(pendingQuantityText) ?? pendingQuantity
+                        let sanitizedValue = max(1, committedValue)
+                        pendingQuantity = sanitizedValue
+                        pendingQuantityText = "\(sanitizedValue)"
+                    }
+                }
+
+                Button {
+                    let newValue = pendingQuantity + 1
+                    pendingQuantity = newValue
+                    pendingQuantityText = "\(newValue)"
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .medium))
+                        .frame(width: 44, height: 44)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+
+            if let total = totalPrice(for: pendingQuantity) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("الإجمالي المتوقع")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formattedPrice(total))
+                        .font(.headline)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button(role: .cancel) {
+                    isQuantitySheetPresented = false
+                } label: {
+                    Text("إلغاء")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    finalizeAddToCart()
+                } label: {
+                    if isAddingToCart {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("أضِف إلى السلة")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isAddingToCart)
+            }
+            .padding(.top, 6)
+        }
+        .padding(24)
     }
 
     private func ensureDefaultSelections(for variants: [ProductVariant]? = nil) {
@@ -596,34 +888,21 @@ private struct ColorSwatch: View {
     let isSelected: Bool
     var onTap: () -> Void
 
-    private var swatchColor: Color {
-        switch label.lowercased() {
-        case "red": return .red
-        case "white": return .white
-        case "silver": return .gray
-        case "black": return .black
-        case "blue": return .blue
-        default: return .secondary
-        }
-    }
-
     var body: some View {
         Button(action: onTap) {
-            ZStack {
-                Circle()
-                    .fill(swatchColor.gradient)
-                    .frame(width: 34, height: 34)
-                    .overlay(Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                if label.lowercased() == "white" {
-                    Circle().stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        .frame(width: 34, height: 34)
-                }
-            }
-            .overlay(
-                Circle()
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2.5)
-                    .frame(width: 40, height: 40)
-            )
+            Text(label.capitalized)
+                .font(.subheadline).fontWeight(.medium)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.2), lineWidth: 1)
+                )
+                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text("لون \(label)"))
@@ -708,4 +987,5 @@ struct FlowLayout: Layout {
 #Preview {
     ProductDetails(product: Product(id: "demo"))
         .environmentObject(FavoritesManager())
+        .environmentObject(CartManager.preview())
 }

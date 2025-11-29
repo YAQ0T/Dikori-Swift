@@ -47,6 +47,7 @@ final class SessionManager: ObservableObject, AuthTokenProviding {
         ProductService.shared.tokenProvider = self
         NotificationService.shared.tokenProvider = self
         OrderService.shared.tokenProvider = self
+        HomeCollectionsService.shared.tokenProvider = self
 
         Task {
             await restoreSessionIfNeeded()

@@ -111,4 +111,5 @@ struct AuthFlowView: View {
         .environmentObject(FavoritesManager())
         .environmentObject(NotificationsManager.preview())
         .environmentObject(OrdersManager.preview())
+        .environmentObject(CartManager.preview())
 }

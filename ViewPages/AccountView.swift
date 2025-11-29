@@ -4,6 +4,7 @@ struct AccountView: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @EnvironmentObject private var ordersManager: OrdersManager
     @EnvironmentObject private var notificationsManager: NotificationsManager
+    @EnvironmentObject private var cartManager: CartManager
 
     private static let orderDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -19,6 +20,7 @@ struct AccountView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     profileSection
+                    cartSection
                     ordersSection
                     notificationsSection
                 }
@@ -85,6 +87,82 @@ struct AccountView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
+                        Spacer()
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var cartSection: some View {
+        cardContainer(title: "سلة التسوق") {
+            VStack(alignment: .leading, spacing: 16) {
+                if cartManager.isEmpty {
+                    Text("سلتك فارغة حالياً")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                } else {
+                    let summaryItems = Array(cartManager.items.prefix(3))
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(summaryItems) { item in
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.title)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+
+                                    if let options = item.optionsSummary, !options.isEmpty {
+                                        Text(options)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+
+                                Spacer()
+
+                                Text("x\(item.quantity)")
+                                    .font(.callout.weight(.medium))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            if item.id != summaryItems.last?.id {
+                                Divider()
+                            }
+                        }
+
+                        if cartManager.items.count > summaryItems.count {
+                            Text("و \(cartManager.items.count - summaryItems.count) منتجات أخرى في السلة...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Divider()
+
+                        HStack {
+                            Text("الإجمالي")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text(cartManager.formattedTotalPrice)
+                                .font(.headline)
+                        }
+                    }
+                }
+
+                NavigationLink {
+                    CartView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "cart")
+                            .imageScale(.medium)
+                            .foregroundColor(.accentColor)
+                        Text("عرض السلة")
+                            .font(.headline)
                         Spacer()
                         Image(systemName: "chevron.left")
                             .foregroundColor(.secondary)
@@ -259,4 +337,5 @@ private extension Order.PaymentDetails {
         .environmentObject(SessionManager.preview())
         .environmentObject(OrdersManager.preview())
         .environmentObject(NotificationsManager.preview())
+        .environmentObject(CartManager.preview())
 }
