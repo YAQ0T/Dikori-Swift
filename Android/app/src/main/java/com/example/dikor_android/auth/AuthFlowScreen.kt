@@ -25,9 +25,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.dikor_android.products.data.HomeCollectionsService
+import com.example.dikor_android.products.data.ProductService
+import com.example.dikor_android.products.managers.CartManager
+import com.example.dikor_android.products.managers.FavoritesManager
+import com.example.dikor_android.products.managers.NotificationsManager
+import com.example.dikor_android.products.ui.ShoppingRoot
 
 @Composable
-fun AuthFlowScreen(viewModel: AuthViewModel) {
+fun AuthFlowScreen(
+    viewModel: AuthViewModel,
+    favoritesManager: FavoritesManager,
+    notificationsManager: NotificationsManager,
+    cartManager: CartManager,
+    productService: ProductService,
+    homeCollectionsService: HomeCollectionsService
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val authState = uiState.authState
     val statusMessage = uiState.statusMessage
@@ -58,7 +71,15 @@ fun AuthFlowScreen(viewModel: AuthViewModel) {
                 AuthState.Loading -> LoadingState()
                 is AuthState.Unauthenticated -> UnauthenticatedState(viewModel, uiState)
                 is AuthState.NeedsVerification -> VerificationState(viewModel, uiState)
-                is AuthState.Authenticated -> AuthenticatedState(viewModel, uiState)
+                is AuthState.Authenticated -> AuthenticatedState(
+                    viewModel = viewModel,
+                    uiState = uiState,
+                    favoritesManager = favoritesManager,
+                    notificationsManager = notificationsManager,
+                    cartManager = cartManager,
+                    productService = productService,
+                    homeCollectionsService = homeCollectionsService
+                )
             }
         }
     }
@@ -186,45 +207,26 @@ private fun VerificationState(viewModel: AuthViewModel, uiState: AuthUiState) {
 }
 
 @Composable
-private fun AuthenticatedState(viewModel: AuthViewModel, uiState: AuthUiState) {
+private fun AuthenticatedState(
+    viewModel: AuthViewModel,
+    uiState: AuthUiState,
+    favoritesManager: FavoritesManager,
+    notificationsManager: NotificationsManager,
+    cartManager: CartManager,
+    productService: ProductService,
+    homeCollectionsService: HomeCollectionsService
+) {
     val session = (uiState.authState as AuthState.Authenticated).session
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            text = "Signed in as ${session.phoneNumber}",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = "Access token\n${session.accessToken}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = "Refresh token\n${session.refreshToken}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Text(
-            text = if (session.isVerified) "SMS verified" else "Awaiting verification",
-            color = if (session.isVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-        )
-
-        uiState.serviceStatus?.let {
-            Text(text = it, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                modifier = Modifier.weight(1f),
-                enabled = !uiState.isWorking,
-                onClick = viewModel::refreshSessionClients
-            ) {
-                Text(if (uiState.isWorking) "Refreshing..." else "Refresh clients")
-            }
-            OutlinedButton(
-                modifier = Modifier.weight(1f),
-                onClick = viewModel::logout
-            ) {
-                Text("Logout")
-            }
-        }
-    }
+    ShoppingRoot(
+        session = session,
+        favoritesManager = favoritesManager,
+        notificationsManager = notificationsManager,
+        cartManager = cartManager,
+        productService = productService,
+        homeCollectionsService = homeCollectionsService,
+        isRefreshing = uiState.isWorking,
+        serviceStatus = uiState.serviceStatus,
+        onRefreshServices = viewModel::refreshSessionClients,
+        onLogout = viewModel::logout
+    )
 }
